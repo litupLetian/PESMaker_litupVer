@@ -1,0 +1,31 @@
+from pesmaker.config.schema import PESMakerConfig
+
+
+def test_config_from_mapping_minimal():
+    config = PESMakerConfig.from_mapping(
+        {
+            "project": "demo",
+            "structures": [{"path": "POSCAR"}],
+        }
+    )
+
+    assert config.project == "demo"
+    assert len(config.structures) == 1
+    assert config.labeling.engine == "vasp"
+    assert config.training.engine == "nep"
+
+
+def test_dataset_split_must_sum_to_one():
+    try:
+        PESMakerConfig.from_mapping(
+            {
+                "project": "demo",
+                "structures": [{"path": "POSCAR"}],
+                "dataset": {"split": [0.8, 0.1, 0.2]},
+            }
+        )
+    except ValueError as exc:
+        assert "sum to 1.0" in str(exc)
+    else:
+        raise AssertionError("invalid split should fail")
+

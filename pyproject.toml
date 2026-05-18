@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pesmaker"
+version = "0.1.0"
+description = "Foundation-potential-assisted workflow for application-oriented machine-learning potential dataset generation."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+  { name = "PESMaker developers" }
+]
+dependencies = [
+  "PyYAML>=6.0"
+]
+
+[project.optional-dependencies]
+atomistic = [
+  "ase>=3.23",
+  "pymatgen>=2024.5"
+]
+dev = [
+  "pytest>=8.0",
+  "ruff>=0.6"
+]
+
+[project.scripts]
+pesmaker = "pesmaker.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+

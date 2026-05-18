@@ -1,0 +1,32 @@
+project: TiO2_demo
+
+structures:
+  - path: POSCAR
+    role: initial
+
+generation:
+  supercell: [2, 2, 2]
+  perturb:
+    n_structures: 50
+    atom_displacement: [0.01, 0.08]
+    strain: [-0.03, 0.03]
+
+sampling:
+  engine: gpumd
+  model: nep89
+  temperatures: [300, 600, 1000]
+  steps: 10000
+  sample_every: 100
+
+labeling:
+  engine: vasp
+  template: templates/vasp_singlepoint
+  scheduler: slurm
+
+dataset:
+  format: extxyz
+  split: [0.9, 0.05, 0.05]
+
+training:
+  model: nep
+
