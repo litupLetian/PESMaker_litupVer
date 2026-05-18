@@ -140,5 +140,18 @@ def _print_banner() -> None:
     The banner is shown once at the beginning of every executable subcommand so
     users can identify the running PESMaker version in logs.
     """
-    print(f"PESMaker {__version__}")
-    print(f"Contact: {__contact__}")
+    logo_lines = [
+        r"  _____   ______   _____   __  __          _                 ",
+        r" |  __ \ |  ____| / ____| |  \/  |        | |                ",
+        r" | |__) || |__   | (___   | \  / |   __ _ | | __  ___  _ __ ",
+        r" |  ___/ |  __|   \___ \  | |\/| |  / _` || |/ / / _ \| '__|",
+        r" | |     | |____  ____) | | |  | | | (_| ||   < |  __/| |   ",
+        r" |_|     |______||_____/  |_|  |_|  \__,_||_|\_\ \___||_|   ",
+        f"                                                   v-{__version__}",
+    ]
+    for line in logo_lines:
+        print(line)
+    print("**************** Potential Energy Surface Maker ****************")
+    print("***** Automated dataset generation for machine-learned potentials *****")
+    print(f"**************** Author: {__contact__} ****************")
+    print("****************************************************************")

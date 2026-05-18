@@ -135,5 +135,6 @@ def test_cli_prints_banner_for_commands(tmp_path, capsys):
     output = capsys.readouterr().out
 
     assert exit_code == 0
-    assert "PESMaker 0.1.0" in output
-    assert "liangting.zj@gmail.com" in output
+    assert "Potential Energy Surface Maker" in output
+    assert "v-0.1.0" in output
+    assert "Author: liangting.zj@gmail.com" in output
