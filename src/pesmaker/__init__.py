@@ -17,5 +17,6 @@
 
 from pesmaker.config.schema import PESMakerConfig
 
-__all__ = ["PESMakerConfig"]
+__all__ = ["PESMakerConfig", "__contact__", "__version__"]
+__contact__ = "liangting.zj@gmail.com"
 __version__ = "0.1.0"

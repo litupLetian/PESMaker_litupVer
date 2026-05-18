@@ -21,7 +21,18 @@ from pathlib import Path
 
 
 def load_structure(path: str | Path):
-    """Read one atomistic structure from any ASE-readable file."""
+    """Read one atomistic structure from any ASE-readable file.
+
+    Args:
+        path: File path accepted by ASE, such as CIF, POSCAR, VASP, or extxyz.
+
+    Returns:
+        An ASE `Atoms` object.
+
+    Raises:
+        RuntimeError: If ASE is not installed.
+        FileNotFoundError: If ASE cannot find the requested path.
+    """
     try:
         from ase.io import read
     except ImportError as exc:
@@ -32,7 +43,17 @@ def load_structure(path: str | Path):
 
 
 def write_structure(atoms, path: str | Path, *, fmt: str | None = None) -> None:
-    """Write one atomistic structure and create parent directories if needed."""
+    """Write one atomistic structure and create parent directories if needed.
+
+    Args:
+        atoms: ASE `Atoms` object to write.
+        path: Destination file path.
+        fmt: Optional ASE writer format, such as `vasp` or `extxyz`.
+
+    Raises:
+        RuntimeError: If ASE is not installed.
+        OSError: If the destination cannot be created or written.
+    """
     try:
         from ase.io import write
     except ImportError as exc:

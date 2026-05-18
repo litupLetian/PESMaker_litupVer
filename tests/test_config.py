@@ -79,7 +79,12 @@ def test_structures_accept_simple_path_list():
 
 
 def test_structures_accept_include_patterns(tmp_path, monkeypatch):
-    """Users can collect many structures with an `include` glob pattern."""
+    """Users can collect many structures with an `include` glob pattern.
+
+    Args:
+        tmp_path: Pytest temporary directory used as a fake project root.
+        monkeypatch: Pytest fixture used to run glob expansion from `tmp_path`.
+    """
     structure_dir = tmp_path / "initial_structures"
     structure_dir.mkdir()
     (structure_dir / "a.cif").write_text("", encoding="utf-8")

@@ -33,7 +33,14 @@ from pesmaker.structures import (
 
 @dataclass(frozen=True)
 class GeneratedStructure:
-    """Metadata for one generated structure file."""
+    """Metadata for one generated structure file.
+
+    Attributes:
+        source: Original input structure path.
+        path: Generated structure file path.
+        index: Zero-based index within the source structure's output folder.
+        atom_count: Number of atoms in the generated structure.
+    """
 
     source: Path
     path: Path
@@ -43,14 +50,32 @@ class GeneratedStructure:
 
 @dataclass(frozen=True)
 class GenerateResult:
-    """Summary returned after structure generation completes."""
+    """Summary returned after structure generation completes.
+
+    Attributes:
+        output_dir: Root directory containing generated structures.
+        structures: Metadata for every generated structure.
+    """
 
     output_dir: Path
     structures: tuple[GeneratedStructure, ...]
 
 
 def generate_structures(config: PESMakerConfig) -> GenerateResult:
-    """Generate perturbed structures from every configured input structure."""
+    """Generate perturbed structures from every configured input structure.
+
+    Args:
+        config: Validated PESMaker configuration.
+
+    Returns:
+        Generation result containing the output directory and generated-file
+        metadata.
+
+    Raises:
+        RuntimeError: If ASE is unavailable for structure IO.
+        ValueError: If output format or perturbation settings are invalid.
+        OSError: If output folders or files cannot be written.
+    """
     output_dir = (
         config.generation.output_dir or Path("runs") / config.project / "generated"
     )
@@ -92,7 +117,16 @@ def _structure_output_dirs(
     config: PESMakerConfig,
     output_dir: Path,
 ) -> tuple[Path, ...]:
-    """Build one unique output directory for each input structure."""
+    """Build one unique output directory for each input structure.
+
+    Args:
+        config: Validated PESMaker configuration.
+        output_dir: Root generation output directory.
+
+    Returns:
+        Tuple of output directories aligned with `config.structures`. Duplicate
+        structure stems receive numeric suffixes such as `_2`.
+    """
     seen: dict[str, int] = {}
     paths: list[Path] = []
     for structure in config.structures:
@@ -104,7 +138,17 @@ def _structure_output_dirs(
 
 
 def _resolve_output_format(name: str) -> tuple[str, str]:
-    """Map a user-facing output format to ASE format and file suffix."""
+    """Map a user-facing output format to ASE format and file suffix.
+
+    Args:
+        name: User-facing format name from `generation.perturb.format`.
+
+    Returns:
+        Pair of ASE writer format and file suffix.
+
+    Raises:
+        ValueError: If `name` is not a supported output format.
+    """
     if name in {"vasp", "poscar"}:
         return "vasp", "vasp"
     if name in {"extxyz", "xyz"}:
@@ -113,7 +157,14 @@ def _resolve_output_format(name: str) -> tuple[str, str]:
 
 
 def _manifest_record(item: GeneratedStructure) -> dict[str, str | int]:
-    """Serialize generated-structure metadata for manifest.jsonl."""
+    """Serialize generated-structure metadata for manifest.jsonl.
+
+    Args:
+        item: Generated-structure metadata object.
+
+    Returns:
+        JSON-serializable dictionary written as one manifest line.
+    """
     return {
         "index": item.index,
         "source": str(item.source),

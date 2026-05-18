@@ -25,7 +25,20 @@ from pesmaker.config.schema import PESMakerConfig
 
 
 def load_config(path: str | Path) -> PESMakerConfig:
-    """Load and validate a PESMaker configuration file."""
+    """Load and validate a PESMaker configuration file.
+
+    Args:
+        path: YAML or TOML configuration file path.
+
+    Returns:
+        A validated `PESMakerConfig` object ready for workflow planning or
+        execution.
+
+    Raises:
+        FileNotFoundError: If `path` does not exist.
+        ValueError: If the file suffix or top-level structure is invalid.
+        RuntimeError: If a YAML file is requested but PyYAML is unavailable.
+    """
     config_path = Path(path)
     if not config_path.exists():
         raise FileNotFoundError(config_path)
@@ -35,7 +48,19 @@ def load_config(path: str | Path) -> PESMakerConfig:
 
 
 def _load_mapping(path: Path) -> dict[str, Any]:
-    """Read a YAML or TOML file into a raw mapping."""
+    """Read a YAML or TOML file into a raw mapping.
+
+    Args:
+        path: Existing input file with `.yaml`, `.yml`, or `.toml` suffix.
+
+    Returns:
+        Raw dictionary loaded from the file.
+
+    Raises:
+        ValueError: If the suffix is unsupported or the top-level document is
+            not a mapping.
+        RuntimeError: If PyYAML is required but not installed.
+    """
     suffix = path.suffix.lower()
     if suffix in {".yaml", ".yml"}:
         try:

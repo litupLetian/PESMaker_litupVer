@@ -21,13 +21,23 @@ import argparse
 import sys
 from pathlib import Path
 
+from pesmaker import __contact__, __version__
 from pesmaker.config.io import load_config
 from pesmaker.workflow.generate import generate_structures
 from pesmaker.workflow.plan import build_plan
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Run the PESMaker command-line interface."""
+    """Run the PESMaker command-line interface.
+
+    Args:
+        argv: Optional command-line arguments. When `None`, arguments are read
+            from `sys.argv` by `argparse`.
+
+    Returns:
+        Process-style exit code. `0` means the selected command completed
+        successfully, and nonzero values indicate user-facing errors.
+    """
     parser = argparse.ArgumentParser(
         prog="pesmaker",
         description="Build application-oriented MLIP datasets and potentials.",
@@ -52,6 +62,7 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     args = parser.parse_args(argv)
+    _print_banner()
 
     if args.command == "init":
         return _write_starter_config(args.path)
@@ -76,7 +87,15 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _write_starter_config(path: Path) -> int:
-    """Write a minimal starter YAML configuration file."""
+    """Write a minimal starter YAML configuration file.
+
+    Args:
+        path: Destination path for the new YAML input file.
+
+    Returns:
+        `0` when the file is written. Returns `1` if the destination already
+        exists because PESMaker refuses to overwrite user files.
+    """
     if path.exists():
         print(f"Refusing to overwrite existing file: {path}", file=sys.stderr)
         return 1
@@ -113,3 +132,13 @@ training:
     path.write_text(template, encoding="utf-8")
     print(f"Wrote starter config: {path}")
     return 0
+
+
+def _print_banner() -> None:
+    """Print the PESMaker command banner with version and contact information.
+
+    The banner is shown once at the beginning of every executable subcommand so
+    users can identify the running PESMaker version in logs.
+    """
+    print(f"PESMaker {__version__}")
+    print(f"Contact: {__contact__}")
