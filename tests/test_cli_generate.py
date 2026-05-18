@@ -19,7 +19,11 @@ from pesmaker.cli import main
 
 
 def test_cli_generate_writes_structures(tmp_path):
-    """The generate command should write perturbed structures and a manifest."""
+    """The generate command should write perturbed structures and a manifest.
+
+    Args:
+        tmp_path: Pytest temporary directory used for config and outputs.
+    """
     cif_path = tmp_path / "te.cif"
     cif_path.write_text(
         """data_te
@@ -70,7 +74,11 @@ generation:
 
 
 def test_cli_generate_uses_unique_folders_for_duplicate_stems(tmp_path):
-    """Duplicate input stems should not overwrite each other's outputs."""
+    """Duplicate input stems should not overwrite each other's outputs.
+
+    Args:
+        tmp_path: Pytest temporary directory used for config and outputs.
+    """
     cif_path = tmp_path / "te.cif"
     cif_path.write_text(
         """data_te
@@ -112,3 +120,21 @@ generation:
     assert exit_code == 0
     assert (output_dir / "te" / "structure_000000.vasp").exists()
     assert (output_dir / "te_2" / "structure_000000.vasp").exists()
+
+
+def test_cli_prints_banner_for_commands(tmp_path, capsys):
+    """Every executed CLI command should print version and contact information.
+
+    Args:
+        tmp_path: Pytest temporary directory used for a starter config.
+        capsys: Pytest fixture used to capture command output.
+    """
+    config_path = tmp_path / "pesmaker.yaml"
+
+    exit_code = main(["init", str(config_path)])
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "Potential Energy Surface Maker" in output
+    assert "v-0.1.0" in output
+    assert "Author: liangting.zj@gmail.com" in output

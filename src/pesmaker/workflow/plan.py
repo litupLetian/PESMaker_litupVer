@@ -24,7 +24,12 @@ from pesmaker.config.schema import PESMakerConfig
 
 @dataclass(frozen=True)
 class WorkflowStep:
-    """One planned workflow step shown to the user."""
+    """One planned workflow step shown to the user.
+
+    Attributes:
+        name: Short stage name.
+        detail: Human-readable stage summary.
+    """
 
     name: str
     detail: str
@@ -32,13 +37,22 @@ class WorkflowStep:
 
 @dataclass(frozen=True)
 class WorkflowPlan:
-    """A complete human-readable plan for a PESMaker project."""
+    """A complete human-readable plan for a PESMaker project.
+
+    Attributes:
+        project: Project name from the configuration.
+        steps: Ordered workflow steps.
+    """
 
     project: str
     steps: tuple[WorkflowStep, ...]
 
     def to_text(self) -> str:
-        """Render the workflow plan as plain text."""
+        """Render the workflow plan as plain text.
+
+        Returns:
+            Multi-line text suitable for printing in the CLI.
+        """
         lines = [f"PESMaker workflow plan for '{self.project}':"]
         for index, step in enumerate(self.steps, start=1):
             lines.append(f"{index}. {step.name}: {step.detail}")
@@ -46,7 +60,14 @@ class WorkflowPlan:
 
 
 def build_plan(config: PESMakerConfig) -> WorkflowPlan:
-    """Build a high-level workflow plan from a PESMaker config."""
+    """Build a high-level workflow plan from a PESMaker config.
+
+    Args:
+        config: Validated PESMaker configuration.
+
+    Returns:
+        Workflow plan summarizing the major stages implied by the config.
+    """
     steps = (
         WorkflowStep(
             "load structures",

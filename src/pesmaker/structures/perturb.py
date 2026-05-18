@@ -25,7 +25,18 @@ import numpy as np
 
 @dataclass(frozen=True)
 class PerturbationSettings:
-    """Parameters controlling cell and atomic coordinate perturbations."""
+    """Parameters controlling cell and atomic coordinate perturbations.
+
+    Attributes:
+        pert_num: Number of perturbed structures to generate per input
+            structure.
+        cell_pert_fraction: Maximum absolute cell perturbation fraction.
+        atom_pert_distance: Atomic displacement scale in Angstrom.
+        atom_pert_style: Distribution used for atomic displacement. Supported
+            values are `normal`, `uniform`, and `const`.
+        atom_pert_prob: Fraction of atoms selected for atomic displacement.
+        seed: Optional random seed for reproducible perturbations.
+    """
 
     pert_num: int = 1
     cell_pert_fraction: float = 0.03
@@ -36,7 +47,14 @@ class PerturbationSettings:
 
     @classmethod
     def from_mapping(cls, data: dict | None) -> "PerturbationSettings":
-        """Parse perturbation settings from the `generation.perturb` section."""
+        """Parse perturbation settings from the `generation.perturb` section.
+
+        Args:
+            data: Optional raw perturbation mapping from the config file.
+
+        Returns:
+            Parsed perturbation settings with defaults for omitted values.
+        """
         data = data or {}
         return cls(
             pert_num=int(data.get("pert_num", 1)),
@@ -49,7 +67,18 @@ class PerturbationSettings:
 
 
 def make_supercell(atoms, supercell: tuple[int, int, int]):
-    """Return an ASE supercell using three positive expansion factors."""
+    """Return an ASE supercell using three positive expansion factors.
+
+    Args:
+        atoms: ASE `Atoms` object to expand.
+        supercell: Three integer replication factors along lattice directions.
+
+    Returns:
+        New ASE `Atoms` object containing the repeated supercell.
+
+    Raises:
+        ValueError: If `supercell` does not contain three positive integers.
+    """
     if len(supercell) != 3:
         raise ValueError("supercell must contain three integers")
     if any(value < 1 for value in supercell):
@@ -63,7 +92,21 @@ def perturb_structure(
     *,
     rng: np.random.Generator | None = None,
 ):
-    """Apply one random cell perturbation and one random atomic perturbation."""
+    """Apply one random cell perturbation and one random atomic perturbation.
+
+    Args:
+        atoms: ASE `Atoms` object to perturb. The input object is not modified.
+        settings: Perturbation parameters.
+        rng: Optional NumPy random generator. When omitted, one is created from
+            `settings.seed`.
+
+    Returns:
+        New perturbed ASE `Atoms` object.
+
+    Raises:
+        ValueError: If perturbation amplitudes or probabilities are invalid, or
+            if `settings.atom_pert_style` is unsupported.
+    """
     if settings.cell_pert_fraction < 0:
         raise ValueError("cell_pert_fraction can not be negative")
     if settings.atom_pert_distance < 0:
@@ -97,7 +140,15 @@ def perturb_structure(
 
 
 def perturb_structures(atoms, settings: PerturbationSettings) -> Iterable:
-    """Yield the requested number of perturbed structures."""
+    """Yield the requested number of perturbed structures.
+
+    Args:
+        atoms: ASE `Atoms` object used as the base structure.
+        settings: Perturbation parameters.
+
+    Yields:
+        Perturbed ASE `Atoms` objects.
+    """
     rng = np.random.default_rng(settings.seed)
     for _ in range(settings.pert_num):
         yield perturb_structure(atoms, settings, rng=rng)
@@ -107,7 +158,16 @@ def get_cell_perturb_matrix(
     cell_pert_fraction: float,
     rng: np.random.Generator,
 ) -> np.ndarray:
-    """Create the symmetric dpdata-style cell perturbation matrix."""
+    """Create the symmetric dpdata-style cell perturbation matrix.
+
+    Args:
+        cell_pert_fraction: Maximum absolute cell perturbation fraction.
+        rng: NumPy random generator used to draw six independent values.
+
+    Returns:
+        A 3x3 symmetric perturbation matrix. Diagonal values perturb
+        compression/extension, and off-diagonal values perturb shear.
+    """
     values = rng.random(6) * 2 * cell_pert_fraction - cell_pert_fraction
     return np.array(
         [
@@ -124,7 +184,22 @@ def get_atom_perturb_vector(
     atom_pert_style: str,
     rng: np.random.Generator,
 ) -> np.ndarray:
-    """Create one random atomic displacement vector."""
+    """Create one random atomic displacement vector.
+
+    Args:
+        atom_pert_distance: Displacement scale in Angstrom.
+        atom_pert_style: Distribution style. `normal` draws independent normal
+            components scaled by `atom_pert_distance / sqrt(3)`, `uniform`
+            samples uniformly inside a sphere, and `const` samples a fixed
+            radius direction.
+        rng: NumPy random generator.
+
+    Returns:
+        Three-component Cartesian displacement vector.
+
+    Raises:
+        ValueError: If `atom_pert_style` is not supported.
+    """
     if atom_pert_style == "normal":
         return (atom_pert_distance / np.sqrt(3.0)) * rng.normal(size=3)
     if atom_pert_style == "uniform":
@@ -135,7 +210,14 @@ def get_atom_perturb_vector(
 
 
 def _random_unit_vector(rng: np.random.Generator) -> np.ndarray:
-    """Draw a random unit vector from a normal distribution."""
+    """Draw a random unit vector from a normal distribution.
+
+    Args:
+        rng: NumPy random generator.
+
+    Returns:
+        Three-component vector with Euclidean norm equal to one.
+    """
     vector = rng.normal(size=3)
     while np.linalg.norm(vector) < 0.1:
         vector = rng.normal(size=3)
