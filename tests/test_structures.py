@@ -1,3 +1,20 @@
+# Copyright 2026 Ting Liang and PESMaker development team
+# This file is part of PESMaker.
+#
+# PESMaker is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# PESMaker is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with PESMaker. If not, see <https://www.gnu.org/licenses/>.
+"""Tests for structure supercell and perturbation utilities."""
+
 import numpy as np
 
 from pesmaker.structures.perturb import (
@@ -10,6 +27,7 @@ from pesmaker.structures.perturb import (
 
 
 def test_make_supercell_multiplies_atom_count():
+    """A 4x4x4 supercell should contain 64 times the original atoms."""
     from ase import Atoms
 
     atoms = Atoms("Te", positions=[[0.0, 0.0, 0.0]], cell=[3.0, 3.0, 3.0], pbc=True)
@@ -20,6 +38,7 @@ def test_make_supercell_multiplies_atom_count():
 
 
 def test_cell_perturb_matrix_matches_dpdata_shape_and_bounds():
+    """Cell perturbation matrices should follow the dpdata-style bounds."""
     rng = np.random.default_rng(1)
 
     matrix = get_cell_perturb_matrix(0.03, rng)
@@ -32,6 +51,7 @@ def test_cell_perturb_matrix_matches_dpdata_shape_and_bounds():
 
 
 def test_normal_atom_perturb_vector_is_seeded():
+    """Normal atomic perturbations should be reproducible with a seed."""
     rng = np.random.default_rng(3)
 
     vector = get_atom_perturb_vector(0.1, "normal", rng)
@@ -41,6 +61,7 @@ def test_normal_atom_perturb_vector_is_seeded():
 
 
 def test_perturb_structures_keeps_atom_count_and_changes_cell():
+    """Perturbed structures should keep atom count while changing geometry."""
     from ase import Atoms
 
     atoms = Atoms("Te", positions=[[0.0, 0.0, 0.0]], cell=[3.0, 3.0, 3.0], pbc=True)

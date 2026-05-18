@@ -1,3 +1,20 @@
+# Copyright 2026 Ting Liang and PESMaker development team
+# This file is part of PESMaker.
+#
+# PESMaker is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# PESMaker is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with PESMaker. If not, see <https://www.gnu.org/licenses/>.
+"""Command-line interface for PESMaker."""
+
 from __future__ import annotations
 
 import argparse
@@ -10,6 +27,7 @@ from pesmaker.workflow.plan import build_plan
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Run the PESMaker command-line interface."""
     parser = argparse.ArgumentParser(
         prog="pesmaker",
         description="Build application-oriented MLIP datasets and potentials.",
@@ -29,7 +47,9 @@ def main(argv: list[str] | None = None) -> int:
     generate_parser.add_argument("config", type=Path)
 
     init_parser = subparsers.add_parser("init", help="Write a starter config file.")
-    init_parser.add_argument("path", type=Path, nargs="?", default=Path("pesmaker.yaml"))
+    init_parser.add_argument(
+        "path", type=Path, nargs="?", default=Path("pesmaker.yaml")
+    )
 
     args = parser.parse_args(argv)
 
@@ -48,9 +68,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "generate":
         result = generate_structures(config)
-        print(
-            f"Generated {len(result.structures)} structure(s) in {result.output_dir}"
-        )
+        print(f"Generated {len(result.structures)} structure(s) in {result.output_dir}")
         return 0
 
     parser.error(f"unknown command: {args.command}")
@@ -58,6 +76,7 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _write_starter_config(path: Path) -> int:
+    """Write a minimal starter YAML configuration file."""
     if path.exists():
         print(f"Refusing to overwrite existing file: {path}", file=sys.stderr)
         return 1
@@ -65,12 +84,10 @@ def _write_starter_config(path: Path) -> int:
     template = """project: example_project
 
 structures:
-  - path: POSCAR
-    role: initial
+  - POSCAR
 
 generation:
   supercell: [1, 1, 1]
-  output_dir: runs/example_project/generated
   perturb:
     pert_num: 10
     cell_pert_fraction: 0.03
@@ -96,4 +113,3 @@ training:
     path.write_text(template, encoding="utf-8")
     print(f"Wrote starter config: {path}")
     return 0
-

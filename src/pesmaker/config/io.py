@@ -1,3 +1,20 @@
+# Copyright 2026 Ting Liang and PESMaker development team
+# This file is part of PESMaker.
+#
+# PESMaker is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# PESMaker is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with PESMaker. If not, see <https://www.gnu.org/licenses/>.
+"""Load PESMaker YAML and TOML configuration files."""
+
 from __future__ import annotations
 
 import tomllib
@@ -8,6 +25,7 @@ from pesmaker.config.schema import PESMakerConfig
 
 
 def load_config(path: str | Path) -> PESMakerConfig:
+    """Load and validate a PESMaker configuration file."""
     config_path = Path(path)
     if not config_path.exists():
         raise FileNotFoundError(config_path)
@@ -17,6 +35,7 @@ def load_config(path: str | Path) -> PESMakerConfig:
 
 
 def _load_mapping(path: Path) -> dict[str, Any]:
+    """Read a YAML or TOML file into a raw mapping."""
     suffix = path.suffix.lower()
     if suffix in {".yaml", ".yml"}:
         try:
@@ -35,4 +54,3 @@ def _load_mapping(path: Path) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise ValueError(f"config must contain a mapping at top level: {path}")
     return data
-
