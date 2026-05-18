@@ -95,6 +95,22 @@ If `pesmaker --help` is not recognized, either add that directory to your user
 Current runtime dependencies are PyYAML, NumPy, and ASE. Pymatgen is optional
 for later atomistic utilities.
 
+## Documentation
+
+The documentation is built with MkDocs and is intended to be published with
+GitHub Pages:
+
+```bash
+python -m pip install -e ".[docs]"
+mkdocs serve
+```
+
+After GitHub Pages is enabled, the online manual will be available at:
+
+```text
+https://Tingliangstu.github.io/PESMaker/
+```
+
 ## Try the Scaffold
 
 ```bash
