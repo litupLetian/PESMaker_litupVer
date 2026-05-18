@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 
 from pesmaker.config.io import load_config
+from pesmaker.workflow.generate import generate_structures
 from pesmaker.workflow.plan import build_plan
 
 
@@ -20,6 +21,12 @@ def main(argv: list[str] | None = None) -> int:
 
     plan_parser = subparsers.add_parser("plan", help="Print the workflow plan.")
     plan_parser.add_argument("config", type=Path)
+
+    generate_parser = subparsers.add_parser(
+        "generate",
+        help="Generate supercells and perturbed structures.",
+    )
+    generate_parser.add_argument("config", type=Path)
 
     init_parser = subparsers.add_parser("init", help="Write a starter config file.")
     init_parser.add_argument("path", type=Path, nargs="?", default=Path("pesmaker.yaml"))
@@ -39,6 +46,13 @@ def main(argv: list[str] | None = None) -> int:
         print(build_plan(config).to_text())
         return 0
 
+    if args.command == "generate":
+        result = generate_structures(config)
+        print(
+            f"Generated {len(result.structures)} structure(s) in {result.output_dir}"
+        )
+        return 0
+
     parser.error(f"unknown command: {args.command}")
     return 2
 
@@ -56,10 +70,13 @@ structures:
 
 generation:
   supercell: [1, 1, 1]
+  output_dir: runs/example_project/generated
   perturb:
-    n_structures: 10
-    atom_displacement: [0.01, 0.05]
-    strain: [-0.01, 0.01]
+    pert_num: 10
+    cell_pert_fraction: 0.03
+    atom_pert_distance: 0.1
+    atom_pert_style: normal
+    format: vasp
 
 sampling:
   engine: none

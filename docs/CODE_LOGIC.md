@@ -15,6 +15,7 @@ flowchart TD
     E -->|"init"| F["write starter YAML"]
     E -->|"validate"| G["load_config(path)"]
     E -->|"plan"| G
+    E -->|"generate"| G
 
     G --> H["_load_mapping(path)"]
     H --> I{"file suffix"}
@@ -35,6 +36,8 @@ flowchart TD
     S --> U["build_plan(config)"]
     U --> V["WorkflowPlan"]
     V --> W["WorkflowPlan.to_text()"]
+    S --> X["generate_structures(config)"]
+    X --> Y["load_structure -> make_supercell -> perturb_structures -> write_structure"]
 ```
 
 ## Module dependencies
@@ -45,8 +48,11 @@ flowchart LR
     Init["pesmaker.__init__"] --> Schema["pesmaker.config.schema"]
     CLI --> IO["pesmaker.config.io"]
     CLI --> Plan["pesmaker.workflow.plan"]
+    CLI --> Generate["pesmaker.workflow.generate"]
     IO --> Schema
     Plan --> Schema
+    Generate --> Schema
+    Generate --> Structures["pesmaker.structures"]
     Tests["tests/test_config.py"] --> Schema
 ```
 

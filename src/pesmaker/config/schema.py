@@ -21,6 +21,7 @@ class StructureInput:
 @dataclass(frozen=True)
 class GenerationConfig:
     supercell: tuple[int, int, int] = (1, 1, 1)
+    output_dir: Path | None = None
     perturb: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
@@ -31,6 +32,7 @@ class GenerationConfig:
             raise ValueError("generation.supercell must contain three integers")
         return cls(
             supercell=tuple(int(value) for value in supercell),
+            output_dir=Path(str(data["output_dir"])) if data.get("output_dir") else None,
             perturb=dict(data.get("perturb", {})),
         )
 

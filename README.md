@@ -65,3 +65,32 @@ pip install -e ".[dev]"
 pesmaker plan examples/pesmaker.yaml
 ```
 
+## Generate perturbed structures
+
+PESMaker can generate supercells and perturbed structures from CIF, POSCAR, and
+other ASE-readable structure files:
+
+```bash
+pip install -e ".[dev]"
+pesmaker generate examples/perturb.yaml
+```
+
+The first perturbation backend follows the common `dpdata.System.perturb` style
+parameters:
+
+```yaml
+generation:
+  supercell: [4, 4, 4]
+  output_dir: runs/example_project/generated
+  perturb:
+    pert_num: 49
+    cell_pert_fraction: 0.03
+    atom_pert_distance: 0.1
+    atom_pert_style: normal
+    seed: 42
+    format: vasp
+```
+
+Current runtime dependencies are PyYAML, NumPy, and ASE. Pymatgen is optional
+for later atomistic utilities.
+

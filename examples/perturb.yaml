@@ -1,0 +1,29 @@
+project: Te_mp_19_test
+
+structures:
+  - path: path/to/input.cif
+    role: initial
+
+generation:
+  supercell: [4, 4, 4]
+  output_dir: runs/Te_mp_19_test/generated
+  perturb:
+    pert_num: 49
+    cell_pert_fraction: 0.03
+    atom_pert_distance: 0.1
+    atom_pert_style: normal
+    seed: 42
+    format: vasp
+
+sampling:
+  engine: none
+
+labeling:
+  engine: vasp
+
+dataset:
+  format: extxyz
+  split: [0.8, 0.1, 0.1]
+
+training:
+  model: nep

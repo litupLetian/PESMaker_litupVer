@@ -12,12 +12,13 @@ authors = [
   { name = "PESMaker developers" }
 ]
 dependencies = [
+  "ase>=3.23",
+  "numpy>=1.24",
   "PyYAML>=6.0"
 ]
 
 [project.optional-dependencies]
 atomistic = [
-  "ase>=3.23",
   "pymatgen>=2024.5"
 ]
 dev = [
