@@ -16,6 +16,7 @@ nav:
   - Installation: installation.md
   - Usage:
       - Quick Start: usage.md
+      - Active Learning Workflow: ACTIVE_LEARNING_WORKFLOW.md
       - CLI: api/cli.md
   - Theory:
       - Structure Perturbation: theory/perturbation.md

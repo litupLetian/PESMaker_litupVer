@@ -131,6 +131,66 @@ generation:
     assert (output_dir / "te_2" / "structure_000000.vasp").exists()
 
 
+def test_cli_generate_writes_surface_defect_folders(tmp_path):
+    """Surface and defect generation should write separate variant folders."""
+    from ase import Atoms
+    from ase.io import write
+
+    atoms = Atoms(
+        "Te4",
+        positions=[
+            (0.0, 0.0, 0.0),
+            (1.0, 0.0, 0.0),
+            (0.0, 1.0, 0.0),
+            (1.0, 1.0, 0.0),
+        ],
+        cell=[2.0, 2.0, 6.0],
+        pbc=[True, True, False],
+    )
+    structure_path = tmp_path / "te2d.xyz"
+    write(structure_path, atoms, format="extxyz")
+    output_dir = tmp_path / "generated"
+    config_path = tmp_path / "pesmaker.yaml"
+    config_path.write_text(
+        f"""project: defect_generate
+structures:
+  - {structure_path.as_posix()}
+generation:
+  supercell: [1, 1, 1]
+  output_dir: {output_dir.as_posix()}
+  surface:
+    vacuum: 30.0
+    axis: 2
+  defects:
+    include_pristine: true
+    single_vacancies:
+      elements: [Te]
+      max_count: 1
+    double_vacancies:
+      elements: [Te]
+      max_count: 1
+    line_defects:
+      elements: [Te]
+      coordinate_axis: 1
+      tolerance: 0.1
+      max_count: 1
+  perturb:
+    pert_num: 1
+    seed: 7
+""",
+        encoding="utf-8",
+    )
+
+    exit_code = main(["generate", str(config_path)])
+
+    assert exit_code == 0
+    assert (output_dir / "te2d" / "pristine" / "structure_000000.vasp").exists()
+    assert (
+        output_dir / "te2d" / "single_vacancy_Te_000000" / "structure_000000.vasp"
+    ).exists()
+    assert len(list(output_dir.glob("te2d/*/structure_000000.vasp"))) == 4
+
+
 def test_cli_prints_banner_for_commands(tmp_path, capsys):
     """Every executed CLI command should print version and contact information.
 

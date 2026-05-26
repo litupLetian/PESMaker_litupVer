@@ -26,6 +26,14 @@ from pesmaker import __contact__, __version__
 from pesmaker.config.io import load_config
 from pesmaker.workflow.generate import GenerateResult, generate_structures
 from pesmaker.workflow.plan import build_plan
+from pesmaker.workflow.stages import (
+    StageResult,
+    collect_labeled_dataset,
+    select_sampling_frames,
+    setup_labeling,
+    setup_sampling,
+    setup_training,
+)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -57,6 +65,36 @@ def main(argv: list[str] | None = None) -> int:
     )
     generate_parser.add_argument("config", type=Path)
 
+    sample_setup_parser = subparsers.add_parser(
+        "sample-setup",
+        help="Prepare MD sampling folders and submission scripts.",
+    )
+    sample_setup_parser.add_argument("config", type=Path)
+
+    select_parser = subparsers.add_parser(
+        "select",
+        help="Select representative MD frames with farthest point sampling.",
+    )
+    select_parser.add_argument("config", type=Path)
+
+    label_setup_parser = subparsers.add_parser(
+        "label-setup",
+        help="Prepare single-point calculation folders and submission scripts.",
+    )
+    label_setup_parser.add_argument("config", type=Path)
+
+    collect_parser = subparsers.add_parser(
+        "collect",
+        help="Collect completed single-point calculations into a training set.",
+    )
+    collect_parser.add_argument("config", type=Path)
+
+    train_setup_parser = subparsers.add_parser(
+        "train-setup",
+        help="Prepare potential training inputs and submission script.",
+    )
+    train_setup_parser.add_argument("config", type=Path)
+
     init_parser = subparsers.add_parser("init", help="Write a starter config file.")
     init_parser.add_argument(
         "path", type=Path, nargs="?", default=Path("pesmaker.yaml")
@@ -83,6 +121,26 @@ def main(argv: list[str] | None = None) -> int:
         _print_generate_summary(result)
         return 0
 
+    if args.command == "sample-setup":
+        _print_stage_result(setup_sampling(config))
+        return 0
+
+    if args.command == "select":
+        _print_stage_result(select_sampling_frames(config))
+        return 0
+
+    if args.command == "label-setup":
+        _print_stage_result(setup_labeling(config))
+        return 0
+
+    if args.command == "collect":
+        _print_stage_result(collect_labeled_dataset(config))
+        return 0
+
+    if args.command == "train-setup":
+        _print_stage_result(setup_training(config))
+        return 0
+
     parser.error(f"unknown command: {args.command}")
     return 2
 
@@ -107,7 +165,26 @@ structures:
   - POSCAR
 
 generation:
-  supercell: [1, 1, 1]
+  supercell: [3, 3, 1]
+  output_dir: generated
+  surface:
+    vacuum: 30.0
+    axis: 2
+    center: true
+  defects:
+    include_pristine: true
+    single_vacancies:
+      elements: [Te]
+      max_count: 4
+    double_vacancies:
+      elements: [Te]
+      nearest_first: true
+      max_count: 4
+    line_defects:
+      elements: [Te]
+      coordinate_axis: 1
+      tolerance: 0.05
+      max_count: 2
   perturb:
     pert_num: 10
     cell_pert_fraction: 0.03
@@ -116,12 +193,20 @@ generation:
     format: vasp
 
 sampling:
-  engine: none
+  engine: gpumd
+  gpumd_dir: /home/tingliang/software/GPUMD/GPUMD-master-26-05-2026/src
+  output_dir: sampling
+  run_in: templates/gpumd/run.in
+  selection:
+    trajectory_pattern: sampling/**/movie.xyz
+    output_dir: selected
+    min_distance: 0.2
+    max_count: 200
 
 labeling:
   engine: vasp
-  template: templates/vasp_singlepoint
-  scheduler: local
+  output_dir: labeling
+  incar: templates/vasp/INCAR
 
 dataset:
   format: extxyz
@@ -129,6 +214,14 @@ dataset:
 
 training:
   model: nep
+  output_dir: training
+
+jobs:
+  machine: local
+  sbatch_templates:
+    sampling: templates/sbatch/gpumd.sh
+    labeling: templates/sbatch/vasp.sh
+    training: templates/sbatch/nep.sh
 """
     path.write_text(template, encoding="utf-8")
     print(f"Wrote starter config: {path}")
@@ -152,6 +245,14 @@ def _print_generate_summary(result: GenerateResult) -> None:
     print("Structure folders:")
     for (source, folder), count in folder_counts.items():
         print(f"  - {source} -> {folder} ({count} structure(s))")
+    print()
+
+
+def _print_stage_result(result: StageResult) -> None:
+    """Print a concise setup or collection result summary."""
+    print(result.message)
+    print(f"Output directory : {result.output_dir}")
+    print(f"Files written    : {len(result.files)}")
     print()
 
 

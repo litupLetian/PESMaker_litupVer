@@ -38,3 +38,44 @@ pesmaker generate examples/perturb.yaml
 
 The current implementation writes structure files and a `manifest.jsonl` file in
 the configured `generation.output_dir`.
+
+## `pesmaker sample-setup`
+
+Prepare MD sampling directories, default `run.in` content, and `submit.sh`
+files from generated structures:
+
+```bash
+pesmaker sample-setup examples/te_defect_md.yaml
+```
+
+## `pesmaker select`
+
+Select representative MD trajectory frames with farthest point sampling:
+
+```bash
+pesmaker select examples/te_defect_md.yaml
+```
+
+## `pesmaker label-setup`
+
+Prepare VASP single-point calculation folders:
+
+```bash
+pesmaker label-setup examples/te_defect_md.yaml
+```
+
+## `pesmaker collect`
+
+Collect completed single-point outputs into an extxyz training set:
+
+```bash
+pesmaker collect examples/te_defect_md.yaml
+```
+
+## `pesmaker train-setup`
+
+Prepare potential-training inputs and submission script:
+
+```bash
+pesmaker train-setup examples/te_defect_md.yaml
+```

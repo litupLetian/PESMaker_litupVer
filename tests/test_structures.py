@@ -24,6 +24,10 @@ from pesmaker.structures.perturb import (
     make_supercell,
     perturb_structures,
 )
+from pesmaker.structures.defects import (
+    apply_surface_settings,
+    generate_defect_variants,
+)
 
 
 def test_make_supercell_multiplies_atom_count():
@@ -78,3 +82,44 @@ def test_perturb_structures_keeps_atom_count_and_changes_cell():
     assert len(generated) == 2
     assert all(len(item) == len(atoms) for item in generated)
     assert not np.allclose(generated[0].cell.array, atoms.cell.array)
+
+
+def test_surface_and_defect_variants_are_generated():
+    """2D surface and defect settings should create concrete variants."""
+    from ase import Atoms
+
+    atoms = Atoms(
+        "Te4",
+        positions=[
+            (0.0, 0.0, 0.0),
+            (1.0, 0.0, 0.0),
+            (0.0, 1.0, 0.0),
+            (1.0, 1.0, 0.0),
+        ],
+        cell=[2.0, 2.0, 4.0],
+        pbc=[True, True, False],
+    )
+
+    slab = apply_surface_settings(atoms, {"vacuum": 30.0, "axis": 2})
+    variants = generate_defect_variants(
+        slab,
+        {
+            "single_vacancies": {"elements": ["Te"], "max_count": 1},
+            "double_vacancies": {"elements": ["Te"], "max_count": 1},
+            "line_defects": {
+                "elements": ["Te"],
+                "coordinate_axis": 1,
+                "tolerance": 0.1,
+                "max_count": 1,
+            },
+        },
+    )
+
+    assert slab.cell.lengths()[2] >= 30.0
+    assert [variant.name for variant in variants] == [
+        "pristine",
+        "single_vacancy_Te_000000",
+        "double_vacancy_Te000000_Te000001",
+        "line_defect_axis1_000",
+    ]
+    assert [len(variant.atoms) for variant in variants] == [4, 3, 2, 2]
