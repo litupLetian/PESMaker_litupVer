@@ -124,8 +124,29 @@ surface:
   center: true
 ```
 
-This centers the structure and gives it 30 Angstrom vacuum along the z axis.
-Use `axis: 0`, `1`, or `2` for x, y, or z.
+`vacuum` is the vacuum thickness in Angstrom. For most 2D materials, use the
+out-of-plane direction.
+
+`axis` selects which cell direction receives the vacuum:
+
+```text
+axis: 0  -> x direction
+axis: 1  -> y direction
+axis: 2  -> z direction
+```
+
+Most 2D structures lie in the xy plane, so `axis: 2` is the usual choice.
+
+`center: true` moves the slab to the middle of the vacuum direction. This gives
+vacuum on both sides of the layer instead of leaving the structure close to one
+cell boundary. For ordinary 2D slab calculations, keep:
+
+```yaml
+axis: 2
+center: true
+```
+
+Only change these values if the material plane is not the xy plane.
 
 Defect and perturbation settings can be nested under `surface`. This means the
 children are created from the surface slab, not from the original primitive
