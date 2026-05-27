@@ -172,6 +172,8 @@ generation:
     axis: 2
     center: true
     defects:
+      mode: random
+      seed: 42
       single_vacancies:
         elements: [Te]
         max_count: 4

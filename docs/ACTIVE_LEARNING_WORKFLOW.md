@@ -52,6 +52,8 @@ generation:
     axis: 2
     center: true
     defects:
+      mode: random
+      seed: 42
       single_vacancies:
         elements: [Te]
         max_count: 8
@@ -133,6 +135,8 @@ structure:
 surface:
   vacuum: 30.0
   defects:
+    mode: random
+    seed: 42
     single_vacancies:
       elements: [Te]
       max_count: 8
@@ -153,6 +157,30 @@ Supported variant families are:
 - `double_vacancies`: remove atom pairs. Nearest pairs are tried first by
   default.
 - `line_defects`: remove atom rows. PESMaker infers the row grouping by default.
+
+Vacancies are deterministic unless random mode is requested. For random,
+reproducible vacancy positions, set:
+
+```yaml
+defects:
+  mode: random
+  seed: 42
+```
+
+`mode: random` applies to all enabled defect families unless a family has its
+own `selection`. The same seed gives the same vacancy positions every time,
+which is useful for reproducible datasets.
+
+Per-family random selection is also supported:
+
+```yaml
+defects:
+  single_vacancies:
+    selection: random
+    seed: 7
+    elements: [Te]
+    max_count: 8
+```
 
 Advanced line-defect controls are available but usually not needed:
 
