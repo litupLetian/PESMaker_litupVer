@@ -11,27 +11,23 @@ generation:
     vacuum: 30.0
     axis: 2
     center: true
-  defects:
-    include_pristine: true
-    single_vacancies:
-      elements: [Te]
-      max_count: 8
-    double_vacancies:
-      elements: [Te]
-      nearest_first: true
-      max_count: 8
-    line_defects:
-      elements: [Te]
-      coordinate_axis: 1
-      tolerance: 0.05
-      max_count: 4
-  perturb:
-    pert_num: 20
-    cell_pert_fraction: 0.03
-    atom_pert_distance: 0.1
-    atom_pert_style: normal
-    seed: 42
-    format: vasp
+    defects:
+      single_vacancies:
+        elements: [Te]
+        max_count: 8
+      double_vacancies:
+        elements: [Te]
+        max_count: 8
+      line_defects:
+        elements: [Te]
+        max_count: 4
+    perturb:
+      pert_num: 20
+      cell_pert_fraction: 0.03
+      atom_pert_distance: 0.1
+      atom_pert_style: normal
+      seed: 42
+      format: vasp
 
 sampling:
   engine: gpumd

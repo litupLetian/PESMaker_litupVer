@@ -69,7 +69,7 @@ def _load_mapping(path: Path) -> dict[str, Any]:
             message = "YAML config files require PyYAML. Install pesmaker with PyYAML."
             raise RuntimeError(message) from exc
         with path.open("r", encoding="utf-8") as handle:
-            data = yaml.safe_load(handle)
+            data = yaml.load(handle, Loader=_UniqueKeyLoader)
     elif suffix == ".toml":
         with path.open("rb") as handle:
             data = tomllib.load(handle)
@@ -79,3 +79,28 @@ def _load_mapping(path: Path) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise ValueError(f"config must contain a mapping at top level: {path}")
     return data
+
+
+def _construct_unique_mapping(loader, node, deep=False):
+    """Construct a YAML mapping while rejecting duplicate keys."""
+    mapping = {}
+    for key_node, value_node in node.value:
+        key = loader.construct_object(key_node, deep=deep)
+        if key in mapping:
+            raise ValueError(f"duplicate YAML key: {key}")
+        mapping[key] = loader.construct_object(value_node, deep=deep)
+    return mapping
+
+
+try:
+    import yaml
+
+    class _UniqueKeyLoader(yaml.SafeLoader):
+        """PyYAML loader that rejects duplicate mapping keys."""
+
+    _UniqueKeyLoader.add_constructor(
+        yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
+        _construct_unique_mapping,
+    )
+except ImportError:  # pragma: no cover - handled when YAML loading is requested
+    _UniqueKeyLoader = None
