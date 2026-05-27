@@ -108,8 +108,6 @@ def test_surface_and_defect_variants_are_generated():
             "double_vacancies": {"elements": ["Te"], "max_count": 1},
             "line_defects": {
                 "elements": ["Te"],
-                "coordinate_axis": 1,
-                "tolerance": 0.1,
                 "max_count": 1,
             },
         },
@@ -120,6 +118,6 @@ def test_surface_and_defect_variants_are_generated():
         "pristine",
         "single_vacancy_Te_000000",
         "double_vacancy_Te000000_Te000001",
-        "line_defect_axis1_000",
+        "line_defect_axis0_000",
     ]
     assert [len(variant.atoms) for variant in variants] == [4, 3, 2, 2]

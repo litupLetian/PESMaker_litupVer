@@ -123,9 +123,11 @@ def _double_vacancies(atoms, settings: Any) -> list[StructureVariant]:
         return []
 
     pairs = list(combinations(_candidate_indices(atoms, options), 2))
-    if options.get("nearest_first"):
+    if bool(options.get("nearest_first", True)):
         positions = atoms.get_positions()
-        pairs.sort(key=lambda pair: np.linalg.norm(positions[pair[0]] - positions[pair[1]]))
+        pairs.sort(
+            key=lambda pair: np.linalg.norm(positions[pair[0]] - positions[pair[1]])
+        )
 
     variants: list[StructureVariant] = []
     for first, second in pairs[: options["max_count"]]:
@@ -148,19 +150,16 @@ def _line_defects(atoms, settings: Any) -> list[StructureVariant]:
     if not options["enabled"]:
         return []
 
-    coordinate_axis = int(options.get("coordinate_axis", 1))
-    tolerance = float(options.get("tolerance", 0.04))
-    if coordinate_axis not in {0, 1, 2}:
-        raise ValueError("line_defects.coordinate_axis must be 0, 1, or 2")
-    if tolerance <= 0:
-        raise ValueError("line_defects.tolerance must be positive")
-
     candidates = _candidate_indices(atoms, options)
     scaled = atoms.get_scaled_positions(wrap=True)
-    rows: dict[int, list[int]] = {}
-    for index in candidates:
-        row_key = int(round(scaled[index][coordinate_axis] / tolerance))
-        rows.setdefault(row_key, []).append(index)
+    coordinate_axis = options.get("coordinate_axis")
+    if coordinate_axis is None:
+        coordinate_axis, rows = _infer_line_rows(scaled, candidates, options)
+    else:
+        coordinate_axis = int(coordinate_axis)
+        if coordinate_axis not in {0, 1, 2}:
+            raise ValueError("line_defects.coordinate_axis must be 0, 1, or 2")
+        rows = _group_line_rows(scaled, candidates, coordinate_axis, options)
 
     variants: list[StructureVariant] = []
     ordered_rows = sorted(rows.values(), key=lambda row: (-len(row), row[0]))
@@ -176,6 +175,66 @@ def _line_defects(atoms, settings: Any) -> list[StructureVariant]:
             )
         )
     return variants
+
+
+def _infer_line_rows(
+    scaled: np.ndarray,
+    candidates: list[int],
+    options: dict[str, Any],
+) -> tuple[int, dict[int, list[int]]]:
+    best_axis = 1
+    best_rows: dict[int, list[int]] = {}
+    best_score = (-1, 0)
+    for axis in (0, 1):
+        rows = _group_line_rows(scaled, candidates, axis, options)
+        score = (max((len(row) for row in rows.values()), default=0), -len(rows))
+        if score > best_score:
+            best_axis = axis
+            best_rows = rows
+            best_score = score
+    return best_axis, best_rows
+
+
+def _group_line_rows(
+    scaled: np.ndarray,
+    candidates: list[int],
+    coordinate_axis: int,
+    options: dict[str, Any],
+) -> dict[int, list[int]]:
+    tolerance = options.get("tolerance")
+    tolerance = float(tolerance) if tolerance is not None else _infer_tolerance(
+        scaled,
+        candidates,
+        coordinate_axis,
+    )
+    if tolerance <= 0:
+        raise ValueError("line_defects.tolerance must be positive")
+
+    rows: dict[int, list[int]] = {}
+    for index in candidates:
+        row_key = int(round(scaled[index][coordinate_axis] / tolerance))
+        rows.setdefault(row_key, []).append(index)
+    return rows
+
+
+def _infer_tolerance(
+    scaled: np.ndarray,
+    candidates: list[int],
+    coordinate_axis: int,
+) -> float:
+    values = sorted(
+        {round(float(scaled[index][coordinate_axis]), 8) for index in candidates}
+    )
+    if len(values) < 2:
+        return 0.05
+    spacings = [
+        values[index + 1] - values[index]
+        for index in range(len(values) - 1)
+        if values[index + 1] - values[index] > 1e-8
+    ]
+    if not spacings:
+        return 0.05
+    return max(min(spacings) * 0.45, 1e-4)
 
 
 def _normalize_defect_options(settings: Any, *, default_max: int) -> dict[str, Any]:

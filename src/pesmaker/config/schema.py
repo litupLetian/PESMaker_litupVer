@@ -80,9 +80,12 @@ class GenerationConfig:
         output_dir: Optional output directory. If omitted, PESMaker writes to
             `runs/<project>/generated`.
         surface: Optional surface/vacuum settings for slab-like 2D systems.
-        defects: Optional vacancy and line-defect generation settings.
+        defects: Optional vacancy and line-defect generation settings. These
+            can be written directly under `generation.defects` or nested under
+            `generation.surface.defects`.
         perturb: Free-form perturbation options consumed by
-            `PerturbationSettings`.
+            `PerturbationSettings`. These can be written directly under
+            `generation.perturb` or nested under `generation.surface.perturb`.
     """
 
     supercell: tuple[int, int, int] = (1, 1, 1)
@@ -108,14 +111,40 @@ class GenerationConfig:
         supercell = data.get("supercell", [1, 1, 1])
         if len(supercell) != 3:
             raise ValueError("generation.supercell must contain three integers")
+        surface = dict(data.get("surface", {}))
+        defects = _nested_generation_options(
+            data,
+            surface,
+            "defects",
+            {
+                "include_pristine",
+                "single_vacancies",
+                "double_vacancies",
+                "line_defects",
+            },
+        )
+        perturb = _nested_generation_options(
+            data,
+            surface,
+            "perturb",
+            {
+                "pert_num",
+                "cell_pert_fraction",
+                "atom_pert_distance",
+                "atom_pert_style",
+                "atom_pert_prob",
+                "seed",
+                "format",
+            },
+        )
         return cls(
             supercell=tuple(int(value) for value in supercell),
             output_dir=Path(str(data["output_dir"]))
             if data.get("output_dir")
             else None,
-            surface=dict(data.get("surface", {})),
-            defects=dict(data.get("defects", {})),
-            perturb=dict(data.get("perturb", {})),
+            surface=surface,
+            defects=defects,
+            perturb=perturb,
         )
 
 
@@ -301,6 +330,23 @@ def _optional_mapping(value: Any, name: str) -> dict[str, Any] | None:
     if value is None:
         return None
     return _require_mapping(value, name)
+
+
+def _nested_generation_options(
+    generation: dict[str, Any],
+    surface: dict[str, Any],
+    section: str,
+    inline_keys: set[str],
+) -> dict[str, Any]:
+    """Collect generation options from top-level and surface-nested forms."""
+    options = dict(generation.get(section, {}) or {})
+    nested = surface.get(section)
+    if nested:
+        options.update(_require_mapping(nested, f"generation.surface.{section}"))
+    inline = {key: surface[key] for key in inline_keys if key in surface}
+    if inline:
+        options.update(inline)
+    return options
 
 
 def _require_mapping(value: Any, name: str) -> dict[str, Any]:

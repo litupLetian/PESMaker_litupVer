@@ -16,6 +16,7 @@
 """Tests for PESMaker configuration parsing."""
 
 from pesmaker.config.schema import PESMakerConfig
+from pesmaker.config.io import load_config
 
 
 def test_config_from_mapping_minimal():
@@ -88,6 +89,70 @@ def test_generation_accepts_surface_defects_and_job_templates():
     assert config.generation.defects["single_vacancies"]["elements"] == ["Te"]
     assert config.jobs.engine == "cluster-a"
     assert config.jobs.options["sbatch_templates"]["labeling"] == "templates/vasp.sh"
+
+
+def test_generation_accepts_surface_nested_defects_and_perturb():
+    """Surface children should be applied on top of the surface structure."""
+    config = PESMakerConfig.from_mapping(
+        {
+            "project": "demo",
+            "structures": ["POSCAR"],
+            "generation": {
+                "supercell": [3, 3, 1],
+                "surface": {
+                    "vacuum": 30,
+                    "defects": {
+                        "single_vacancies": {"elements": ["Te"], "max_count": 2}
+                    },
+                    "perturb": {"pert_num": 5, "format": "vasp"},
+                },
+            },
+        }
+    )
+
+    assert config.generation.surface["vacuum"] == 30
+    assert config.generation.defects["single_vacancies"]["max_count"] == 2
+    assert config.generation.perturb["pert_num"] == 5
+
+
+def test_generation_accepts_inline_surface_defect_keys():
+    """A concise surface block can contain defect keys directly."""
+    config = PESMakerConfig.from_mapping(
+        {
+            "project": "demo",
+            "structures": ["POSCAR"],
+            "generation": {
+                "surface": {
+                    "vacuum": 30,
+                    "single_vacancies": {"elements": ["Te"], "max_count": 2},
+                },
+            },
+        }
+    )
+
+    assert config.generation.defects["single_vacancies"]["elements"] == ["Te"]
+
+
+def test_yaml_duplicate_keys_are_rejected(tmp_path):
+    """Duplicate YAML keys should not silently overwrite earlier settings."""
+    config_path = tmp_path / "run.yaml"
+    config_path.write_text(
+        """project: demo
+structures:
+  - POSCAR
+generation:
+  supercell: [3, 3, 1]
+  supercell: [3, 3, 3]
+""",
+        encoding="utf-8",
+    )
+
+    try:
+        load_config(config_path)
+    except ValueError as exc:
+        assert "duplicate YAML key: supercell" in str(exc)
+    else:
+        raise AssertionError("duplicate YAML keys should fail")
 
 
 def test_structures_accept_simple_path_list():

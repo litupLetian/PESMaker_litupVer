@@ -161,22 +161,20 @@ generation:
   surface:
     vacuum: 30.0
     axis: 2
-  defects:
-    include_pristine: true
-    single_vacancies:
-      elements: [Te]
-      max_count: 1
-    double_vacancies:
-      elements: [Te]
-      max_count: 1
-    line_defects:
-      elements: [Te]
-      coordinate_axis: 1
-      tolerance: 0.1
-      max_count: 1
-  perturb:
-    pert_num: 1
-    seed: 7
+    defects:
+      include_pristine: true
+      single_vacancies:
+        elements: [Te]
+        max_count: 1
+      double_vacancies:
+        elements: [Te]
+        max_count: 1
+      line_defects:
+        elements: [Te]
+        max_count: 1
+    perturb:
+      pert_num: 1
+      seed: 7
 """,
         encoding="utf-8",
     )

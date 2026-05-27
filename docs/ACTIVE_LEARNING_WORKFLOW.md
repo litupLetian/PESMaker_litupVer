@@ -33,6 +33,10 @@ training/      # potential training input files and submit script
 Start from `examples/te_defect_md.yaml` and adapt paths for the machine you are
 using. A typical 2D Te/Pd-rich workflow looks like this:
 
+Do not repeat the same YAML key in one mapping. For example, do not write two
+`generation.supercell` entries. PESMaker rejects duplicate keys because YAML
+would otherwise silently keep only one value.
+
 ```yaml
 project: Te_Pd_rich_defect_md
 
@@ -47,27 +51,23 @@ generation:
     vacuum: 30.0
     axis: 2
     center: true
-  defects:
-    include_pristine: true
-    single_vacancies:
-      elements: [Te]
-      max_count: 8
-    double_vacancies:
-      elements: [Te]
-      nearest_first: true
-      max_count: 8
-    line_defects:
-      elements: [Te]
-      coordinate_axis: 1
-      tolerance: 0.05
-      max_count: 4
-  perturb:
-    pert_num: 20
-    cell_pert_fraction: 0.03
-    atom_pert_distance: 0.1
-    atom_pert_style: normal
-    seed: 42
-    format: vasp
+    defects:
+      single_vacancies:
+        elements: [Te]
+        max_count: 8
+      double_vacancies:
+        elements: [Te]
+        max_count: 8
+      line_defects:
+        elements: [Te]
+        max_count: 4
+    perturb:
+      pert_num: 20
+      cell_pert_fraction: 0.03
+      atom_pert_distance: 0.1
+      atom_pert_style: normal
+      seed: 42
+      format: vasp
 
 sampling:
   engine: gpumd
@@ -125,31 +125,47 @@ surface:
 This centers the structure and gives it 30 Angstrom vacuum along the z axis.
 Use `axis: 0`, `1`, or `2` for x, y, or z.
 
-`defects` controls structural variants:
+Defect and perturbation settings can be nested under `surface`. This means the
+children are created from the surface slab, not from the original primitive
+structure:
 
 ```yaml
-defects:
-  include_pristine: true
-  single_vacancies:
-    elements: [Te]
-    max_count: 8
-  double_vacancies:
-    elements: [Te]
-    nearest_first: true
-    max_count: 8
-  line_defects:
-    elements: [Te]
-    coordinate_axis: 1
-    tolerance: 0.05
-    max_count: 4
+surface:
+  vacuum: 30.0
+  defects:
+    single_vacancies:
+      elements: [Te]
+      max_count: 8
+    double_vacancies:
+      elements: [Te]
+      max_count: 8
+    line_defects:
+      elements: [Te]
+      max_count: 4
+  perturb:
+    pert_num: 20
 ```
 
 Supported variant families are:
 
 - `pristine`: the surface supercell without removed atoms.
 - `single_vacancies`: remove one atom from the selected elements.
-- `double_vacancies`: remove atom pairs, optionally prioritizing nearest pairs.
-- `line_defects`: remove rows of atoms grouped by fractional coordinate.
+- `double_vacancies`: remove atom pairs. Nearest pairs are tried first by
+  default.
+- `line_defects`: remove atom rows. PESMaker infers the row grouping by default.
+
+Advanced line-defect controls are available but usually not needed:
+
+- `coordinate_axis`: fractional coordinate used to group rows. For example,
+  `coordinate_axis: 1` groups atoms with similar y coordinates, giving line
+  defects along the x direction.
+- `tolerance`: fractional-coordinate bin width for deciding whether atoms are
+  in the same row. If omitted, PESMaker estimates it from the structure.
+
+Advanced double-vacancy control:
+
+- `nearest_first`: when `true`, the closest atom pairs are generated first.
+  This is the default, so it can be omitted in normal input files.
 
 Run:
 
