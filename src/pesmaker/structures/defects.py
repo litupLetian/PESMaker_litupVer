@@ -91,9 +91,25 @@ def generate_defect_variants(
     if include_pristine or not settings:
         variants.append(StructureVariant("pristine", atoms.copy(), "pristine"))
 
-    variants.extend(_single_vacancies(atoms, settings.get("single_vacancies")))
-    variants.extend(_double_vacancies(atoms, settings.get("double_vacancies")))
-    variants.extend(_line_defects(atoms, settings.get("line_defects")))
+    defaults = _defect_defaults(settings)
+    variants.extend(
+        _single_vacancies(
+            atoms,
+            _merge_defect_options(defaults, settings.get("single_vacancies")),
+        )
+    )
+    variants.extend(
+        _double_vacancies(
+            atoms,
+            _merge_defect_options(defaults, settings.get("double_vacancies")),
+        )
+    )
+    variants.extend(
+        _line_defects(
+            atoms,
+            _merge_defect_options(defaults, settings.get("line_defects")),
+        )
+    )
     return tuple(variants)
 
 
@@ -103,7 +119,12 @@ def _single_vacancies(atoms, settings: Any) -> list[StructureVariant]:
         return []
 
     variants: list[StructureVariant] = []
-    for index in _candidate_indices(atoms, options)[: options["max_count"]]:
+    indices = _candidate_indices(atoms, options)
+    if _selection_mode(options) == "random":
+        indices = _sample_items(indices, options)
+    else:
+        indices = indices[: options["max_count"]]
+    for index in indices:
         variant = atoms.copy()
         symbol = variant[index].symbol
         del variant[index]
@@ -123,14 +144,20 @@ def _double_vacancies(atoms, settings: Any) -> list[StructureVariant]:
         return []
 
     pairs = list(combinations(_candidate_indices(atoms, options), 2))
-    if bool(options.get("nearest_first", True)):
+    selection = _selection_mode(options, default="nearest")
+    if selection == "random":
+        pairs = _sample_items(pairs, options)
+    elif selection in {"nearest", "ordered"} and bool(options.get("nearest_first", True)):
         positions = atoms.get_positions()
         pairs.sort(
             key=lambda pair: np.linalg.norm(positions[pair[0]] - positions[pair[1]])
         )
+        pairs = pairs[: options["max_count"]]
+    else:
+        raise ValueError(f"unsupported double_vacancies selection: {selection}")
 
     variants: list[StructureVariant] = []
-    for first, second in pairs[: options["max_count"]]:
+    for first, second in pairs:
         variant = atoms.copy()
         symbols = (variant[first].symbol, variant[second].symbol)
         for index in sorted((first, second), reverse=True):
@@ -163,7 +190,11 @@ def _line_defects(atoms, settings: Any) -> list[StructureVariant]:
 
     variants: list[StructureVariant] = []
     ordered_rows = sorted(rows.values(), key=lambda row: (-len(row), row[0]))
-    for line_index, row in enumerate(ordered_rows[: options["max_count"]]):
+    if _selection_mode(options) == "random":
+        selected_rows = _sample_items(ordered_rows, options)
+    else:
+        selected_rows = ordered_rows[: options["max_count"]]
+    for line_index, row in enumerate(selected_rows):
         variant = atoms.copy()
         for index in sorted(row, reverse=True):
             del variant[index]
@@ -175,6 +206,24 @@ def _line_defects(atoms, settings: Any) -> list[StructureVariant]:
             )
         )
     return variants
+
+
+def _defect_defaults(settings: dict[str, Any]) -> dict[str, Any]:
+    defaults = {}
+    for key in ("mode", "selection", "seed"):
+        if key in settings:
+            defaults[key] = settings[key]
+    return defaults
+
+
+def _merge_defect_options(defaults: dict[str, Any], settings: Any) -> Any:
+    if not defaults or settings in (None, False):
+        return settings
+    if settings is True:
+        return {**defaults, "enabled": True}
+    if not isinstance(settings, dict):
+        return settings
+    return {**defaults, **settings}
 
 
 def _infer_line_rows(
@@ -245,11 +294,28 @@ def _normalize_defect_options(settings: Any, *, default_max: int) -> dict[str, A
     if not isinstance(settings, dict):
         raise ValueError("defect settings must be a mapping or boolean")
     options = dict(settings)
+    if "mode" in options and "selection" not in options:
+        options["selection"] = options["mode"]
     options["enabled"] = bool(options.get("enabled", True))
     options["max_count"] = int(options.get("max_count", default_max))
     if options["max_count"] < 0:
         raise ValueError("defect max_count can not be negative")
     return options
+
+
+def _selection_mode(options: dict[str, Any], *, default: str = "ordered") -> str:
+    return str(options.get("selection", default)).lower()
+
+
+def _sample_items(items: list[Any], options: dict[str, Any]) -> list[Any]:
+    max_count = min(int(options["max_count"]), len(items))
+    if max_count <= 0:
+        return []
+    rng = np.random.default_rng(
+        int(options["seed"]) if options.get("seed") is not None else None
+    )
+    selected = rng.choice(len(items), size=max_count, replace=False)
+    return [items[index] for index in selected.tolist()]
 
 
 def _candidate_indices(atoms, options: dict[str, Any]) -> list[int]:

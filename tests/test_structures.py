@@ -121,3 +121,44 @@ def test_surface_and_defect_variants_are_generated():
         "line_defect_axis0_000",
     ]
     assert [len(variant.atoms) for variant in variants] == [4, 3, 2, 2]
+
+
+def test_random_vacancies_are_seeded_and_reproducible():
+    """Random vacancy mode should be reproducible with a user seed."""
+    from ase import Atoms
+
+    atoms = Atoms(
+        "Te6",
+        positions=[
+            (0.0, 0.0, 0.0),
+            (1.0, 0.0, 0.0),
+            (2.0, 0.0, 0.0),
+            (0.0, 1.0, 0.0),
+            (1.0, 1.0, 0.0),
+            (2.0, 1.0, 0.0),
+        ],
+        cell=[3.0, 2.0, 10.0],
+        pbc=[True, True, False],
+    )
+    settings = {
+        "mode": "random",
+        "seed": 42,
+        "include_pristine": False,
+        "single_vacancies": {"elements": ["Te"], "max_count": 2},
+        "double_vacancies": {"elements": ["Te"], "max_count": 2},
+    }
+
+    first = generate_defect_variants(atoms, settings)
+    second = generate_defect_variants(atoms, settings)
+    different_seed = generate_defect_variants(atoms, {**settings, "seed": 7})
+
+    assert [variant.name for variant in first] == [variant.name for variant in second]
+    assert [variant.name for variant in first] != [
+        variant.name for variant in different_seed
+    ]
+    assert [variant.name for variant in first] == [
+        "single_vacancy_Te_000000",
+        "single_vacancy_Te_000004",
+        "double_vacancy_Te000000_Te000002",
+        "double_vacancy_Te000002_Te000005",
+    ]
