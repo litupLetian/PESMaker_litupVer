@@ -15,6 +15,11 @@
 # along with PESMaker. If not, see <https://www.gnu.org/licenses/>.
 """Structure IO, supercell, and perturbation utilities."""
 
+from pesmaker.structures.defects import (
+    StructureVariant,
+    apply_surface_settings,
+    generate_defect_variants,
+)
 from pesmaker.structures.io import load_structure, write_structure
 from pesmaker.structures.perturb import (
     PerturbationSettings,
@@ -27,6 +32,9 @@ from pesmaker.structures.perturb import (
 
 __all__ = [
     "PerturbationSettings",
+    "StructureVariant",
+    "apply_surface_settings",
+    "generate_defect_variants",
     "get_atom_perturb_vector",
     "get_cell_perturb_matrix",
     "load_structure",

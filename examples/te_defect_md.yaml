@@ -1,0 +1,68 @@
+project: Te_Pd_rich_defect_md
+
+structures:
+  include:
+    - initial_structures/*.cif
+
+generation:
+  supercell: [3, 3, 1]
+  output_dir: generated
+  surface:
+    vacuum: 30.0
+    axis: 2
+    center: true
+  defects:
+    include_pristine: true
+    single_vacancies:
+      elements: [Te]
+      max_count: 8
+    double_vacancies:
+      elements: [Te]
+      nearest_first: true
+      max_count: 8
+    line_defects:
+      elements: [Te]
+      coordinate_axis: 1
+      tolerance: 0.05
+      max_count: 4
+  perturb:
+    pert_num: 20
+    cell_pert_fraction: 0.03
+    atom_pert_distance: 0.1
+    atom_pert_style: normal
+    seed: 42
+    format: vasp
+
+sampling:
+  engine: gpumd
+  gpumd_dir: /home/tingliang/software/GPUMD/GPUMD-master-26-05-2026/src
+  output_dir: sampling
+  run_in: templates/gpumd/run.in
+  selection:
+    trajectory_pattern: sampling/**/movie.xyz
+    output_dir: selected
+    min_distance: 0.2
+    max_count: 200
+
+labeling:
+  engine: vasp
+  output_dir: labeling
+  incar: templates/vasp/INCAR
+  command: vasp_std
+
+dataset:
+  format: extxyz
+  split: [0.8, 0.1, 0.1]
+
+training:
+  model: nep
+  output_dir: training
+  dataset: train.xyz
+  command: nep
+
+jobs:
+  machine: local
+  sbatch_templates:
+    sampling: templates/sbatch/gpumd.sh
+    labeling: templates/sbatch/vasp.sh
+    training: templates/sbatch/nep.sh

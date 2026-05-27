@@ -24,6 +24,8 @@ from pathlib import Path
 from pesmaker.config.schema import PESMakerConfig
 from pesmaker.structures import (
     PerturbationSettings,
+    apply_surface_settings,
+    generate_defect_variants,
     load_structure,
     make_supercell,
     perturb_structures,
@@ -38,6 +40,8 @@ class GeneratedStructure:
     Attributes:
         source: Original input structure path.
         path: Generated structure file path.
+        variant: Structural variant name, such as `pristine` or a defect name.
+        variant_description: Human-readable variant description.
         index: Zero-based index within the source structure's output folder.
         atom_count: Number of atoms in the generated structure.
     """
@@ -46,6 +50,8 @@ class GeneratedStructure:
     path: Path
     index: int
     atom_count: int
+    variant: str = "pristine"
+    variant_description: str = "pristine"
 
 
 @dataclass(frozen=True)
@@ -92,23 +98,35 @@ def generate_structures(config: PESMakerConfig) -> GenerateResult:
         for input_index, structure in enumerate(config.structures):
             atoms = load_structure(structure.path)
             supercell_atoms = make_supercell(atoms, config.generation.supercell)
+            base_atoms = apply_surface_settings(
+                supercell_atoms, config.generation.surface
+            )
+            variants = generate_defect_variants(base_atoms, config.generation.defects)
             structure_dir = structure_dirs[input_index]
             structure_dir.mkdir(parents=True, exist_ok=True)
-            for structure_index, perturbed in enumerate(
-                perturb_structures(supercell_atoms, settings)
-            ):
-                output_path = (
-                    structure_dir / f"structure_{structure_index:06d}.{suffix}"
+            use_variant_dirs = bool(config.generation.defects)
+            for variant in variants:
+                variant_dir = (
+                    structure_dir / variant.name if use_variant_dirs else structure_dir
                 )
-                write_structure(perturbed, output_path, fmt=ase_format)
-                item = GeneratedStructure(
-                    source=structure.path,
-                    path=output_path,
-                    index=structure_index,
-                    atom_count=len(perturbed),
-                )
-                generated.append(item)
-                manifest.write(json.dumps(_manifest_record(item)) + "\n")
+                variant_dir.mkdir(parents=True, exist_ok=True)
+                for structure_index, perturbed in enumerate(
+                    perturb_structures(variant.atoms, settings)
+                ):
+                    output_path = (
+                        variant_dir / f"structure_{structure_index:06d}.{suffix}"
+                    )
+                    write_structure(perturbed, output_path, fmt=ase_format)
+                    item = GeneratedStructure(
+                        source=structure.path,
+                        path=output_path,
+                        variant=variant.name,
+                        variant_description=variant.description,
+                        index=structure_index,
+                        atom_count=len(perturbed),
+                    )
+                    generated.append(item)
+                    manifest.write(json.dumps(_manifest_record(item)) + "\n")
 
     return GenerateResult(output_dir=output_dir, structures=tuple(generated))
 
@@ -169,5 +187,7 @@ def _manifest_record(item: GeneratedStructure) -> dict[str, str | int]:
         "index": item.index,
         "source": str(item.source),
         "path": str(item.path),
+        "variant": item.variant,
+        "variant_description": item.variant_description,
         "atom_count": item.atom_count,
     }

@@ -79,12 +79,16 @@ class GenerationConfig:
         supercell: Three positive integer expansion factors.
         output_dir: Optional output directory. If omitted, PESMaker writes to
             `runs/<project>/generated`.
+        surface: Optional surface/vacuum settings for slab-like 2D systems.
+        defects: Optional vacancy and line-defect generation settings.
         perturb: Free-form perturbation options consumed by
             `PerturbationSettings`.
     """
 
     supercell: tuple[int, int, int] = (1, 1, 1)
     output_dir: Path | None = None
+    surface: dict[str, Any] = field(default_factory=dict)
+    defects: dict[str, Any] = field(default_factory=dict)
     perturb: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
@@ -109,6 +113,8 @@ class GenerationConfig:
             output_dir=Path(str(data["output_dir"]))
             if data.get("output_dir")
             else None,
+            surface=dict(data.get("surface", {})),
+            defects=dict(data.get("defects", {})),
             perturb=dict(data.get("perturb", {})),
         )
 
@@ -210,6 +216,7 @@ class PESMakerConfig:
         labeling: DFT labeling engine configuration.
         dataset: Dataset export configuration.
         training: Potential training engine configuration.
+        jobs: Cluster submission and machine-specific template options.
     """
 
     project: str
@@ -224,6 +231,9 @@ class PESMakerConfig:
     dataset: DatasetConfig = field(default_factory=DatasetConfig)
     training: EngineConfig = field(
         default_factory=lambda: EngineConfig(engine="nep", options={})
+    )
+    jobs: EngineConfig = field(
+        default_factory=lambda: EngineConfig(engine="local", options={})
     )
 
     @classmethod
@@ -266,6 +276,11 @@ class PESMakerConfig:
                 _optional_mapping(data.get("training"), "training"),
                 default_engine="nep",
                 alias_engine_key="model",
+            ),
+            jobs=EngineConfig.from_mapping(
+                _optional_mapping(data.get("jobs"), "jobs"),
+                default_engine="local",
+                alias_engine_key="machine",
             ),
         )
 

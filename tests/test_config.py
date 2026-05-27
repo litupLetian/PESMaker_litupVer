@@ -63,6 +63,33 @@ def test_training_model_alias_selects_engine():
     assert config.training.options == {"device": "cuda"}
 
 
+def test_generation_accepts_surface_defects_and_job_templates():
+    """Extended workflow sections should remain structured config options."""
+    config = PESMakerConfig.from_mapping(
+        {
+            "project": "demo",
+            "structures": ["POSCAR"],
+            "generation": {
+                "supercell": [3, 3, 1],
+                "surface": {"vacuum": 30, "axis": 2},
+                "defects": {
+                    "single_vacancies": {"elements": ["Te"], "max_count": 2}
+                },
+            },
+            "jobs": {
+                "machine": "cluster-a",
+                "sbatch_templates": {"labeling": "templates/vasp.sh"},
+            },
+        }
+    )
+
+    assert config.generation.supercell == (3, 3, 1)
+    assert config.generation.surface["vacuum"] == 30
+    assert config.generation.defects["single_vacancies"]["elements"] == ["Te"]
+    assert config.jobs.engine == "cluster-a"
+    assert config.jobs.options["sbatch_templates"]["labeling"] == "templates/vasp.sh"
+
+
 def test_structures_accept_simple_path_list():
     """Users can list structure paths directly without `{path: ...}`."""
     config = PESMakerConfig.from_mapping(

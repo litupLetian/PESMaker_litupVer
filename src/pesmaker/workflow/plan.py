@@ -76,14 +76,16 @@ def build_plan(config: PESMakerConfig) -> WorkflowPlan:
         WorkflowStep(
             "generate candidates",
             f"supercell={config.generation.supercell}, "
+            f"surface={bool(config.generation.surface)}, "
+            f"defects={bool(config.generation.defects)}, "
             f"perturb={bool(config.generation.perturb)}",
         ),
         WorkflowStep(
-            "sample configurations",
+            "prepare MD sampling",
             f"engine={config.sampling.engine}",
         ),
         WorkflowStep(
-            "label with DFT",
+            "prepare single-point labeling",
             f"engine={config.labeling.engine}",
         ),
         WorkflowStep(
