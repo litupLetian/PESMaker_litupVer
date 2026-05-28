@@ -66,6 +66,15 @@ class StageResult:
     message: str
 
 
+@dataclass(frozen=True)
+class SamplingCondition:
+    """One MD sampling temperature condition."""
+
+    name: str
+    start: float
+    end: float
+
+
 def setup_sampling(config: PESMakerConfig) -> StageResult:
     """Prepare MD sampling folders for GPUMD or future engines."""
     engine = config.sampling.engine.lower()
@@ -73,43 +82,66 @@ def setup_sampling(config: PESMakerConfig) -> StageResult:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     records = _load_input_records(config, config.sampling.options)
-    run_in = _read_optional_file(
+    conditions = _sampling_conditions(config.sampling.options)
+    run_template = _read_optional_file(
         config.sampling.options.get("run_in"),
         default=DEFAULT_GPUMD_RUN_IN,
     )
     files: list[Path] = []
     manifest_path = output_dir / "sampling_manifest.jsonl"
     with manifest_path.open("w", encoding="utf-8") as manifest:
-        for index, record in enumerate(records):
-            stage_dir = output_dir / f"md_{index:06d}"
-            stage_dir.mkdir(parents=True, exist_ok=True)
-            structure_path = stage_dir / "model.xyz"
-            atoms = load_structure(record["path"])
-            write_structure(atoms, structure_path, fmt="extxyz")
-            run_in_path = stage_dir / "run.in"
-            run_in_path.write_text(run_in, encoding="utf-8")
-            command = _sampling_command(config)
-            submit_path = _write_submit_script(
-                config,
-                stage_dir,
-                stage="sampling",
-                command=command,
-            )
-            files.extend([structure_path, run_in_path, submit_path])
-            manifest.write(
-                json.dumps(
-                    {
-                        "index": index,
-                        "engine": engine,
-                        "source": record["path"],
-                        "workdir": str(stage_dir),
-                        "run_in": str(run_in_path),
-                    }
+        job_index = 0
+        for record_index, record in enumerate(records):
+            for condition in conditions:
+                stage_dir = output_dir / f"md_{record_index:06d}_{condition.name}"
+                stage_dir.mkdir(parents=True, exist_ok=True)
+                structure_path = stage_dir / "model.xyz"
+                atoms = load_structure(record["path"])
+                write_structure(atoms, structure_path, fmt="extxyz")
+                potential_name, potential_path = _prepare_sampling_potential(
+                    config.sampling.options,
+                    stage_dir,
                 )
-                + "\n"
-            )
+                run_in_path = stage_dir / "run.in"
+                run_in = _render_sampling_run_in(
+                    config.sampling.options,
+                    run_template,
+                    condition,
+                    potential_name=potential_name,
+                )
+                run_in_path.write_text(run_in, encoding="utf-8")
+                command = _sampling_command(config)
+                submit_path = _write_submit_script(
+                    config,
+                    stage_dir,
+                    stage="sampling",
+                    command=command,
+                )
+                files.extend(
+                    path
+                    for path in (structure_path, potential_path, run_in_path, submit_path)
+                    if path is not None
+                )
+                manifest.write(
+                    json.dumps(
+                        {
+                            "index": job_index,
+                            "engine": engine,
+                            "source": record["path"],
+                            "condition": condition.name,
+                            "potential": potential_name,
+                            "temperature_start": condition.start,
+                            "temperature_end": condition.end,
+                            "workdir": str(stage_dir),
+                            "run_in": str(run_in_path),
+                        }
+                    )
+                    + "\n"
+                )
+                job_index += 1
     files.append(manifest_path)
-    return StageResult(output_dir, tuple(files), f"Prepared {len(records)} MD job(s)")
+    job_count = len(records) * len(conditions)
+    return StageResult(output_dir, tuple(files), f"Prepared {job_count} MD job(s)")
 
 
 def select_sampling_frames(config: PESMakerConfig) -> StageResult:
@@ -304,6 +336,133 @@ def _read_optional_file(value: Any, *, default: str) -> str:
     if value:
         return Path(str(value)).read_text(encoding="utf-8")
     return default
+
+
+def _sampling_conditions(options: dict[str, Any]) -> tuple[SamplingCondition, ...]:
+    temperatures = options.get("temperatures")
+    if temperatures is not None:
+        if isinstance(temperatures, str) and "-" in temperatures:
+            start, end = _parse_temperature_range(temperatures)
+            return (_ramp_temperature(start, end),)
+        if not isinstance(temperatures, list) or not temperatures:
+            raise ValueError("sampling.temperatures must be a non-empty list")
+        return tuple(_constant_temperature(float(value)) for value in temperatures)
+
+    temperature = options.get("temperature", options.get("temp", 300))
+    if isinstance(temperature, str) and "-" in temperature:
+        start, end = _parse_temperature_range(temperature)
+        return (_ramp_temperature(start, end),)
+    if isinstance(temperature, dict):
+        start = float(temperature.get("start", temperature.get("from", 300)))
+        end = float(temperature.get("end", temperature.get("to", start)))
+        return (_ramp_temperature(start, end) if start != end else _constant_temperature(start),)
+    if isinstance(temperature, list):
+        if len(temperature) == 2:
+            return (_ramp_temperature(float(temperature[0]), float(temperature[1])),)
+        return tuple(_constant_temperature(float(value)) for value in temperature)
+    return (_constant_temperature(float(temperature)),)
+
+
+def _parse_temperature_range(value: str) -> tuple[float, float]:
+    parts = [part.strip() for part in value.split("-", 1)]
+    if len(parts) != 2 or not all(parts):
+        raise ValueError(f"invalid sampling temperature range: {value}")
+    return float(parts[0]), float(parts[1])
+
+
+def _constant_temperature(temperature: float) -> SamplingCondition:
+    label = _temperature_label(temperature)
+    return SamplingCondition(name=f"temp_{label}K", start=temperature, end=temperature)
+
+
+def _ramp_temperature(start: float, end: float) -> SamplingCondition:
+    return SamplingCondition(
+        name=f"ramp_{_temperature_label(start)}K_to_{_temperature_label(end)}K",
+        start=start,
+        end=end,
+    )
+
+
+def _temperature_label(value: float) -> str:
+    return str(int(value)) if float(value).is_integer() else str(value).replace(".", "p")
+
+
+def _render_sampling_run_in(
+    options: dict[str, Any],
+    template: str,
+    condition: SamplingCondition,
+    *,
+    potential_name: str | None = None,
+) -> str:
+    potential = potential_name or str(options.get("potential", "nep89_20250409.txt"))
+    rendered = template.format(
+        potential=potential,
+        temperature=_format_temperature(condition.start),
+        temperature_start=_format_temperature(condition.start),
+        temperature_end=_format_temperature(condition.end),
+    )
+    rendered = _rewrite_gpumd_run_line(rendered, "potential", f"potential      {potential}")
+    rendered = _rewrite_gpumd_run_line(
+        rendered,
+        "velocity",
+        f"velocity       {_format_temperature(condition.start)}",
+    )
+    return _rewrite_gpumd_ensemble_temperature(rendered, condition)
+
+
+def _prepare_sampling_potential(
+    options: dict[str, Any],
+    stage_dir: Path,
+) -> tuple[str, Path | None]:
+    potential = Path(str(options.get("potential", "nep89_20250409.txt")))
+    if potential.exists() and potential.is_file():
+        target = stage_dir / potential.name
+        shutil.copy2(potential, target)
+        return potential.name, target
+    return str(options.get("potential", "nep89_20250409.txt")), None
+
+
+def _rewrite_gpumd_run_line(text: str, keyword: str, replacement: str) -> str:
+    lines = text.splitlines()
+    replaced = False
+    output = []
+    for line in lines:
+        if line.strip().startswith(keyword):
+            output.append(replacement)
+            replaced = True
+        else:
+            output.append(line)
+    if not replaced:
+        output.insert(0, replacement)
+    return "\n".join(output) + "\n"
+
+
+def _rewrite_gpumd_ensemble_temperature(
+    text: str,
+    condition: SamplingCondition,
+) -> str:
+    output = []
+    start = _format_temperature(condition.start)
+    end = _format_temperature(condition.end)
+    for line in text.splitlines():
+        tokens = line.split()
+        if len(tokens) >= 4 and tokens[0] == "ensemble":
+            tokens[2] = start
+            tokens[3] = end
+            output.append(_format_gpumd_tokens(tokens))
+        else:
+            output.append(line)
+    return "\n".join(output) + "\n"
+
+
+def _format_gpumd_tokens(tokens: list[str]) -> str:
+    if len(tokens) < 2:
+        return " ".join(tokens)
+    return f"{tokens[0]:<14} {tokens[1]} " + " ".join(tokens[2:])
+
+
+def _format_temperature(value: float) -> str:
+    return str(int(value)) if float(value).is_integer() else f"{value:g}"
 
 
 def _sampling_command(config: PESMakerConfig) -> str:
