@@ -87,6 +87,8 @@ sampling:
   engine: gpumd
   gpumd_dir: /home/tingliang/software/GPUMD/GPUMD-master-26-05-2026/src
   output_dir: sampling
+  potential: nep89_20250409.txt
+  temperatures: [300, 600, 900]
   run_in: templates/gpumd/run.in
   selection:
     trajectory_pattern: sampling/**/movie.xyz
@@ -308,21 +310,53 @@ sampling:
   engine: gpumd
   gpumd_dir: /home/tingliang/software/GPUMD/GPUMD-master-26-05-2026/src
   output_dir: sampling
+  potential: nep89_20250409.txt
+  temperatures: [300, 600, 900]
   run_in: templates/gpumd/run.in
 ```
 
-The default `examples/templates/gpumd/run.in` is:
+`temperatures: [300, 600, 900]` creates one constant-temperature MD job per
+temperature for every generated structure. For example, one structure becomes:
 
 ```text
-potential      nep89_20250409.txt
-velocity       300
+sampling/
+  md_000000_temp_300K/
+  md_000000_temp_600K/
+  md_000000_temp_900K/
+```
 
-ensemble       npt_scr 300 300 100 0 0 0 20 20 100 1000
+For a heating ramp, use `temperature` instead:
+
+```yaml
+sampling:
+  engine: gpumd
+  potential: nep89_20250409.txt
+  temperature: 300-1500
+```
+
+This creates one ramp job per generated structure and writes an ensemble line
+with start temperature 300 K and end temperature 1500 K.
+
+If `potential` points to an existing file, PESMaker copies it into each MD
+working directory. If it is only a filename, PESMaker writes that filename into
+`run.in` and assumes you will make the potential available when running GPUMD.
+
+The default `examples/templates/gpumd/run.in` is a template:
+
+```text
+potential      {potential}
+velocity       {temperature_start}
+
+ensemble       npt_scr {temperature_start} {temperature_end} 100 0 0 0 20 20 100 1000
 time_step      1
 dump_thermo    1000
 dump_position  3000
 run            3000000
 ```
+
+The placeholders are filled by `pesmaker sample-setup`. If you provide a plain
+GPUMD `run.in` without placeholders, PESMaker still rewrites `potential`,
+`velocity`, and the first two ensemble temperatures from the sampling config.
 
 Run:
 
@@ -335,11 +369,11 @@ Expected output:
 ```text
 sampling/
   sampling_manifest.jsonl
-  md_000000/
+  md_000000_temp_300K/
     model.xyz
     run.in
     submit.sh
-  md_000001/
+  md_000000_temp_600K/
     model.xyz
     run.in
     submit.sh
