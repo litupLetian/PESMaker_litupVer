@@ -15,7 +15,6 @@ The current development focus is the first structure-generation layer:
 
 ```bash
 pesmaker validate examples/perturb.yaml
-pesmaker plan examples/perturb.yaml
 pesmaker generate examples/perturb.yaml
 ```
 
@@ -26,7 +25,7 @@ The intended full workflow is:
 ```text
 initial structures
   -> structure generation and targeted sampling
-  -> DFT single-point labeling
+  -> DFT SCF labeling
   -> dataset assembly
   -> NEP or MACE training
   -> deployable potential

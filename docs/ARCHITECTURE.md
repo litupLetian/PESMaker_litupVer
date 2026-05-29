@@ -5,7 +5,6 @@ PESMaker is organized around replaceable workflow stages.
 ## Core objects
 
 - `PESMakerConfig`: validated project configuration.
-- `WorkflowPlan`: an executable summary of the requested workflow.
 - `TaskManifest`: persistent record of generated structures, DFT jobs, parsed
   labels, datasets, and trained models.
 
@@ -31,8 +30,7 @@ JSON Lines. A database service should be optional, not mandatory.
 The base package should stay light. Heavy scientific tools should be optional
 extras or external executables:
 
-- base: configuration, workflow planning, file manifests, CLI;
+- base: configuration, stage setup, file manifests, CLI;
 - atomistic extra: ASE and pymatgen;
 - workflow extras: jobflow or AiiDA only if a user chooses those integrations;
 - engines: VASP, CP2K, GPUMD, LAMMPS, MACE as external programs.
-

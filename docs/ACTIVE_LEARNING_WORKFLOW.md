@@ -1,9 +1,9 @@
 # Active Learning Workflow Manual
 
 This manual describes the PESMaker workflow for 2D defect structures, large
-model driven molecular dynamics, single-point labeling, dataset assembly, and
+model driven molecular dynamics, SCF calculations, dataset assembly, and
 potential training. The workflow is intentionally split into independent stages
-so that structure generation, MD jobs, VASP jobs, dataset collection, and
+so that structure generation, sampling jobs, SCF jobs, dataset collection, and
 training runs can be prepared, submitted, inspected, and repeated separately.
 
 The recommended command order is:
@@ -23,7 +23,7 @@ Each stage writes to its own directory:
 generated/     # initial supercells, surface slabs, defects, perturbations
 sampling/      # MD working directories and sampling submit scripts
 selected/      # representative frames selected from MD trajectories
-labeling/      # VASP single-point calculation directories
+labeling/      # SCF calculation directories
 train.xyz      # collected labeled dataset
 training/      # potential training input files and submit script
 ```
@@ -124,7 +124,7 @@ jobs:
 ## Stage 1: Generate Surface and Defect Structures
 
 The `generation` section prepares the structural candidates that seed MD or
-single-point calculations. Each entry under `generation.tasks` is independent:
+SCF calculations. Each entry under `generation.tasks` is independent:
 one task can build a 2D surface with random vacancies, while another task can
 build a bulk supercell with only perturbations.
 
@@ -431,8 +431,10 @@ the SCF setup stage.
 
 ## Stage 4: Prepare VASP SCF Calculations
 
-The `scf-setup` stage turns selected structures into independent VASP SCF
-calculation folders.
+The `scf-setup` stage turns selected structures into independent SCF
+calculation folders. The current engine is VASP, and the command is named for
+the calculation type rather than the engine so the workflow can support other
+SCF backends later.
 
 ```yaml
 labeling:
@@ -464,7 +466,7 @@ labeling/
     submit.sh
 ```
 
-The default `examples/templates/vasp/INCAR` is a conservative single-point
+The default `examples/templates/vasp/INCAR` is a conservative SCF
 template:
 
 ```text
@@ -539,14 +541,15 @@ potential directories concatenated into `POTCAR`.
 Submit the prepared jobs with:
 
 ```bash
-pesmaker submit run.yaml --stage labeling
+pesmaker submit run.yaml
 ```
 
-Use `--dry-run` first to write the scheduler commands without calling `sbatch`.
+Use `--stage sampling` or `--stage training` for those stages. Use `--dry-run`
+first to write the scheduler commands without calling `sbatch`.
 
 ## Stage 5: Collect the Labeled Dataset
 
-After single-point jobs finish, collect the labeled frames:
+After SCF jobs finish, collect the labeled frames:
 
 ```yaml
 labeling:
@@ -640,14 +643,13 @@ clusters.
 Before running the full workflow:
 
 - Validate the config with `pesmaker validate run.yaml`.
-- Inspect the plan with `pesmaker plan run.yaml`.
 - Confirm the input structures match the intended chemistry and dimensionality.
 - Confirm `generation.surface.vacuum` is large enough for the slab.
 - Limit defect `max_count` values at first, then expand after checking outputs.
 - Submit a small MD batch before launching the full sampling campaign.
 - Check selected frames visually before preparing VASP jobs.
 - Confirm `INCAR`, `POTCAR`, and `KPOINTS` are suitable for the target system.
-- Collect only completed and converged single-point outputs.
+- Collect only completed and converged SCF outputs.
 - Keep `train.xyz` and `training/` versioned by project or campaign name.
 
 ## Current Scope and Extension Points
@@ -664,7 +666,7 @@ Current capabilities:
 - Random perturbations for every variant.
 - GPUMD sampling setup.
 - Farthest point frame selection.
-- VASP single-point setup.
+- SCF setup.
 - Extxyz dataset collection through ASE.
 - NEP training setup.
 - Machine-specific sbatch templates.

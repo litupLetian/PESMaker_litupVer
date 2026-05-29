@@ -444,14 +444,14 @@ def setup_labeling(config: PESMakerConfig) -> StageResult:
     return StageResult(
         output_dir,
         tuple(files),
-        f"Prepared {len(records)} single-point job(s)",
+        f"Prepared {len(records)} SCF job(s)",
     )
 
 
 def submit_jobs(
     config: PESMakerConfig,
     *,
-    stage: str = "labeling",
+    stage: str = "scf",
     dry_run: bool = False,
 ) -> StageResult:
     """Submit prepared stage jobs with the configured scheduler command."""
@@ -758,7 +758,7 @@ def _join_potcar_chunks(chunks: list[bytes]) -> bytes:
 
 
 def _stage_submit_scripts(config: PESMakerConfig, stage: str) -> list[Path]:
-    manifest_name = f"{stage}_manifest.jsonl"
+    manifest_name = _stage_manifest_name(stage)
     output_dir = _stage_output_dir(config, stage)
     manifest_path = output_dir / manifest_name
     if manifest_path.exists():
@@ -777,11 +777,17 @@ def _stage_submit_scripts(config: PESMakerConfig, stage: str) -> list[Path]:
 def _stage_output_dir(config: PESMakerConfig, stage: str) -> Path:
     if stage == "sampling":
         return _section_output_dir(config, config.sampling.options, "sampling")
-    if stage == "labeling":
+    if stage == "scf":
         return _section_output_dir(config, config.labeling.options, "labeling")
     if stage == "training":
         return _section_output_dir(config, config.training.options, "training")
-    raise ValueError("stage must be one of: sampling, labeling, training")
+    raise ValueError("stage must be one of: sampling, scf, training")
+
+
+def _stage_manifest_name(stage: str) -> str:
+    if stage == "scf":
+        return "labeling_manifest.jsonl"
+    return f"{stage}_manifest.jsonl"
 
 
 def _read_manifest(path: Path) -> list[dict[str, Any]]:

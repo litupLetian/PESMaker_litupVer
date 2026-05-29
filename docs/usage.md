@@ -28,12 +28,6 @@ Validate the input:
 pesmaker validate examples/perturb.yaml
 ```
 
-Inspect the planned workflow:
-
-```bash
-pesmaker plan examples/perturb.yaml
-```
-
 Generate the structures:
 
 ```bash

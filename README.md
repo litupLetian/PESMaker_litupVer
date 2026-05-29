@@ -21,13 +21,13 @@ PESMaker focuses on this path:
 initial structures
   -> structure generation and targeted sampling
   -> candidate filtering
-  -> DFT single-point labeling
+  -> DFT SCF labeling
   -> dataset assembly
   -> NEP or MACE training
   -> model report and deployable potential
 ```
 
-The first implementation target is VASP single-point labeling, followed by
+The first implementation target is VASP SCF labeling, followed by
 GPUMD/NEP and MACE training workflows.
 
 ## Differentiation
@@ -54,7 +54,7 @@ src/pesmaker/
   parsers/       # VASP, GPUMD, MACE output parsing
   dataset/       # extxyz, NEP train.xyz, HDF5, metadata
   trainers/      # NEP and MACE training interfaces
-  workflow/      # workflow planning and state tracking
+  workflow/      # stage setup and workflow execution helpers
   cli.py         # command line interface
 ```
 
@@ -142,7 +142,7 @@ https://Tingliangstu.github.io/PESMaker/
 
 ```bash
 python -m pesmaker validate examples/pesmaker.yaml
-python -m pesmaker plan examples/pesmaker.yaml
+python -m pesmaker generate examples/pesmaker.yaml
 ```
 
 ## Generate perturbed structures
