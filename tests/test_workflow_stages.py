@@ -338,8 +338,8 @@ jobs:
 
     result = submit_jobs(load_config(config_path), dry_run=True)
 
-    assert result.message == "Would submit 1 labeling job(s)"
-    log = tmp_path / "labeling" / "labeling_submitted_jobs.txt"
+    assert result.message == "Would submit 1 scf job(s)"
+    log = tmp_path / "labeling" / "scf_submitted_jobs.txt"
     assert "DRY-RUN" in log.read_text(encoding="utf-8")
 
 

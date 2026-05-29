@@ -20,14 +20,6 @@ Validate a YAML or TOML configuration file:
 pesmaker validate examples/perturb.yaml
 ```
 
-## `pesmaker plan`
-
-Print a human-readable workflow plan:
-
-```bash
-pesmaker plan examples/perturb.yaml
-```
-
 ## `pesmaker generate`
 
 Generate supercells and perturbed structures:
@@ -41,7 +33,7 @@ the configured `generation.output_dir`.
 
 ## `pesmaker sample-setup`
 
-Prepare MD sampling directories, default `run.in` content, and `submit.sh`
+Prepare sampling job directories, default `run.in` content, and `submit.sh`
 files from generated structures:
 
 ```bash
@@ -58,7 +50,7 @@ pesmaker select examples/te_defect_md.yaml
 
 ## `pesmaker scf-setup`
 
-Prepare VASP SCF calculation folders:
+Prepare SCF calculation folders:
 
 ```bash
 pesmaker scf-setup examples/te_defect_md.yaml
@@ -66,17 +58,18 @@ pesmaker scf-setup examples/te_defect_md.yaml
 
 ## `pesmaker submit`
 
-Submit prepared `submit.sh` files for a workflow stage:
+Submit prepared `submit.sh` files. By default this submits SCF jobs:
 
 ```bash
-pesmaker submit examples/te_defect_md.yaml --stage labeling
+pesmaker submit examples/te_defect_md.yaml
 ```
 
-Use `--dry-run` to record the commands without invoking the scheduler.
+Use `--stage sampling` or `--stage training` for those stages. Use `--dry-run`
+to record the commands without invoking the scheduler.
 
 ## `pesmaker collect`
 
-Collect completed single-point outputs into an extxyz training set:
+Collect completed SCF outputs into an extxyz training set:
 
 ```bash
 pesmaker collect examples/te_defect_md.yaml

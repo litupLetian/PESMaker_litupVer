@@ -20,8 +20,8 @@ import json
 from pesmaker.cli import main
 
 
-def test_cli_help_hides_sampling_aliases(capsys):
-    """Top-level help should show one sampling setup command, not every alias."""
+def test_cli_help_shows_simple_public_commands(capsys):
+    """Top-level help should show only concise public workflow commands."""
     try:
         main(["-h"])
     except SystemExit as exc:
@@ -29,6 +29,9 @@ def test_cli_help_hides_sampling_aliases(capsys):
     output = capsys.readouterr().out
 
     assert "sample-setup" in output
+    assert "scf-setup" in output
+    assert "plan" not in output
+    assert "Prepare SCF calculation job folders" in output
 
 
 def test_cli_generate_writes_structures(tmp_path, capsys):

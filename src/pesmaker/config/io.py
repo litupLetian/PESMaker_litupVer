@@ -35,8 +35,7 @@ def load_config(path: str | Path) -> PESMakerConfig:
         path: YAML or TOML configuration file path.
 
     Returns:
-        A validated `PESMakerConfig` object ready for workflow planning or
-        execution.
+        A validated `PESMakerConfig` object ready for workflow execution.
 
     Raises:
         FileNotFoundError: If `path` does not exist.

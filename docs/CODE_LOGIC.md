@@ -14,7 +14,6 @@ flowchart TD
     D --> E{"command"}
     E -->|"init"| F["write starter YAML"]
     E -->|"validate"| G["load_config(path)"]
-    E -->|"plan"| G
     E -->|"generate"| G
 
     G --> H["_load_mapping(path)"]
@@ -33,9 +32,6 @@ flowchart TD
 
     G --> S["PESMakerConfig"]
     S --> T["validate: print OK"]
-    S --> U["build_plan(config)"]
-    U --> V["WorkflowPlan"]
-    V --> W["WorkflowPlan.to_text()"]
     S --> X["generate_structures(config)"]
     X --> Y["load_structure -> make_supercell -> perturb_structures -> write_structure"]
 ```
@@ -47,10 +43,8 @@ flowchart LR
     Main["pesmaker.__main__"] --> CLI["pesmaker.cli"]
     Init["pesmaker.__init__"] --> Schema["pesmaker.config.schema"]
     CLI --> IO["pesmaker.config.io"]
-    CLI --> Plan["pesmaker.workflow.plan"]
     CLI --> Generate["pesmaker.workflow.generate"]
     IO --> Schema
-    Plan --> Schema
     Generate --> Schema
     Generate --> Structures["pesmaker.structures"]
     Tests["tests/test_config.py"] --> Schema
@@ -61,7 +55,6 @@ flowchart LR
 - `pesmaker.cli`: command-line parsing and user-facing commands.
 - `pesmaker.config.io`: YAML/TOML file loading.
 - `pesmaker.config.schema`: typed configuration objects and validation.
-- `pesmaker.workflow.plan`: human-readable workflow plan generation.
 - Empty stage packages: future homes for structures, samplers, generators,
   labelers, jobs, parsers, dataset assembly, and trainers.
 

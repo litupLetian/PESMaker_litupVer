@@ -21,7 +21,7 @@ The intended path is:
 ```text
 known material or task
   -> targeted structure generation and sampling
-  -> DFT single-point labeling
+  -> DFT SCF labeling
   -> dataset quality checks
   -> NEP or MACE training
   -> final potential
@@ -58,10 +58,9 @@ MVP 1 should not try to implement all planned science modules. It should support
 
 1. read one or more initial structures;
 2. generate supercells and perturbations;
-3. create VASP single-point folders from a user template;
+3. create SCF calculation folders from a user template;
 4. write a manifest of all generated calculation tasks;
-5. provide a CLI that can validate config and print the workflow plan.
+5. provide a CLI that can validate configs and prepare workflow stages.
 
 After this is stable, add job submission, VASP parsing, extxyz export, and NEP
 training.
-

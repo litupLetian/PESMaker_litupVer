@@ -28,7 +28,6 @@ from pesmaker.workflow.generate import (
     format_generate_summary,
     generate_structures,
 )
-from pesmaker.workflow.plan import build_plan
 from pesmaker.workflow.stages import (
     StageResult,
     collect_labeled_dataset,
@@ -54,60 +53,77 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="pesmaker",
         description="Build application-oriented MLIP datasets and potentials.",
+        epilog='Use "pesmaker COMMAND -h" for command-specific help.',
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    validate_parser = subparsers.add_parser("validate", help="Validate a config file.")
-    validate_parser.add_argument("config", type=Path)
-
-    plan_parser = subparsers.add_parser("plan", help="Print the workflow plan.")
-    plan_parser.add_argument("config", type=Path)
+    validate_parser = subparsers.add_parser(
+        "validate",
+        help="Check a config file.",
+        description="Check config syntax and required fields.",
+    )
+    _add_config_argument(validate_parser)
 
     generate_parser = subparsers.add_parser(
         "generate",
         help="Generate supercells and perturbed structures.",
+        description="Generate structures and write a manifest for later stages.",
     )
-    generate_parser.add_argument("config", type=Path)
+    _add_config_argument(generate_parser)
 
     sample_setup_parser = subparsers.add_parser(
         "sample-setup",
-        help="Prepare MD sampling folders and submission scripts.",
+        help="Prepare sampling job folders and submission scripts.",
+        description="Prepare sampling job folders from generated structures.",
     )
-    sample_setup_parser.add_argument("config", type=Path)
+    _add_config_argument(sample_setup_parser)
 
     select_parser = subparsers.add_parser(
         "select",
-        help="Select representative MD frames with farthest point sampling.",
+        help="Select representative sampled structures.",
+        description="Select representative structures from sampling trajectories.",
     )
-    select_parser.add_argument("config", type=Path)
+    _add_config_argument(select_parser)
 
     scf_setup_parser = subparsers.add_parser(
         "scf-setup",
-        help="Prepare VASP SCF calculation folders and submission scripts.",
+        help="Prepare SCF calculation job folders and submission scripts.",
+        description=(
+            "Prepare SCF calculation job folders from generated or selected "
+            "structures. For VASP configs this writes POSCAR, INCAR, POTCAR, "
+            "and submit.sh."
+        ),
     )
-    scf_setup_parser.add_argument("config", type=Path)
+    _add_config_argument(scf_setup_parser)
 
     collect_parser = subparsers.add_parser(
         "collect",
-        help="Collect completed VASP SCF calculations into a training set.",
+        help="Collect completed SCF calculations into a training set.",
+        description="Collect completed SCF outputs into a training dataset.",
     )
-    collect_parser.add_argument("config", type=Path)
+    _add_config_argument(collect_parser)
 
     train_setup_parser = subparsers.add_parser(
         "train-setup",
-        help="Prepare potential training inputs and submission script.",
+        help="Prepare training job inputs and submission scripts.",
+        description="Prepare model-training input files and submission scripts.",
     )
-    train_setup_parser.add_argument("config", type=Path)
+    _add_config_argument(train_setup_parser)
 
     submit_parser = subparsers.add_parser(
         "submit",
-        help="Submit prepared stage jobs with the configured scheduler.",
+        help="Submit prepared jobs with the configured scheduler.",
+        description=(
+            "Submit prepared jobs with the configured scheduler. Defaults to "
+            "the SCF stage."
+        ),
     )
-    submit_parser.add_argument("config", type=Path)
+    _add_config_argument(submit_parser)
     submit_parser.add_argument(
         "--stage",
-        choices=("sampling", "labeling", "training"),
-        default="labeling",
+        choices=("sampling", "scf", "training"),
+        default="scf",
+        help="Workflow stage to submit. Default: scf.",
     )
     submit_parser.add_argument(
         "--dry-run",
@@ -115,7 +131,11 @@ def main(argv: list[str] | None = None) -> int:
         help="Write the submission commands without calling the scheduler.",
     )
 
-    init_parser = subparsers.add_parser("init", help="Write a starter config file.")
+    init_parser = subparsers.add_parser(
+        "init",
+        help="Write a starter YAML config.",
+        description="Write a starter YAML config file.",
+    )
     init_parser.add_argument(
         "path", type=Path, nargs="?", default=Path("pesmaker.yaml")
     )
@@ -130,10 +150,6 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "validate":
         print(f"OK: {args.config} describes project '{config.project}'.")
-        return 0
-
-    if args.command == "plan":
-        print(build_plan(config).to_text())
         return 0
 
     if args.command == "generate":
@@ -167,6 +183,11 @@ def main(argv: list[str] | None = None) -> int:
 
     parser.error(f"unknown command: {args.command}")
     return 2
+
+
+def _add_config_argument(parser: argparse.ArgumentParser) -> None:
+    """Add the common config-file argument to a subcommand parser."""
+    parser.add_argument("config", type=Path, help="YAML or TOML config file.")
 
 
 def _write_starter_config(path: Path) -> int:

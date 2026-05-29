@@ -13,8 +13,6 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with PESMaker. If not, see <https://www.gnu.org/licenses/>.
-"""Workflow planning and execution helpers."""
+"""Workflow stage setup and execution helpers."""
 
-from pesmaker.workflow.plan import WorkflowPlan, build_plan
-
-__all__ = ["WorkflowPlan", "build_plan"]
+__all__: list[str] = []
