@@ -473,17 +473,63 @@ template:
 
 ```text
 SYSTEM = PESMaker single point
-ENCUT = 520
-EDIFF = 1E-6
-IBRION = -1
-NSW = 0
-ISMEAR = 0
-SIGMA = 0.05
+GGA = PE
 LREAL = Auto
+ENCUT = 650
+KSPACING = 0.2
+KGAMMA = .TRUE.
+NSW = 1
+IBRION = -1
+ALGO = Normal
+EDIFF = 1E-06
+SIGMA = 0.02
+ISMEAR = 0
+PREC = Accurate
+NELM = 150
 ```
 
 You can also provide `potcar`, `kpoints`, or a complete `template_dir` under
 `labeling`; these files are copied into every calculation folder.
+
+For generated VASP files, PESMaker preserves the generated folder structure by
+default while dropping the `.vasp` suffix from each calculation folder:
+
+```yaml
+labeling:
+  engine: vasp
+  output_dir: labeling
+  input_manifest: generated/manifest.jsonl
+  incar: templates/vasp/INCAR
+  command: /home/a4s5d/software/VASP/CPU_vasp.6.6.0/bin/vasp_std
+
+jobs:
+  submit_command: sbatch
+  sbatch_templates:
+    labeling: templates/sbatch/vasp_cpu_36.sh
+```
+
+This writes folders such as:
+
+```text
+labeling/
+  mp-105_Te/
+    structure_000000/
+      POSCAR
+      structure_000000.vasp-bak
+      INCAR
+      submit.sh
+```
+
+The original generated structure is backed up by default. Set
+`backup_source: false` under `labeling` only if those backups are not wanted.
+
+Submit the prepared jobs with:
+
+```bash
+pesmaker submit run.yaml --stage labeling
+```
+
+Use `--dry-run` first to write the scheduler commands without calling `sbatch`.
 
 ## Stage 5: Collect the Labeled Dataset
 
