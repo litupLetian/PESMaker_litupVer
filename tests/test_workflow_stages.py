@@ -21,7 +21,12 @@ import json
 
 from pesmaker.cli import main
 from pesmaker.config.io import load_config
-from pesmaker.workflow.stages import submit_jobs
+from pesmaker.workflow.stages import (
+    RECOMMENDED_GW_POTCARS,
+    RECOMMENDED_PBE_POTCARS,
+    _potcar_directory_name,
+    submit_jobs,
+)
 
 
 def test_sampling_labeling_and_training_setup_write_stage_files(tmp_path):
@@ -287,6 +292,26 @@ labeling:
     workdir = tmp_path / "labeling" / "mp-Na" / "structure_000000"
     assert (workdir / "POTCAR").read_text(encoding="utf-8") == "POTCAR Na sv GW\n"
     assert (workdir / "POTCAR.spec").read_text(encoding="utf-8") == "Na_sv_GW\n"
+
+
+def test_recommended_potcar_tables_are_applied_for_all_entries():
+    """Every built-in VASP recommendation should be used by POTCAR selection."""
+    assert len(RECOMMENDED_PBE_POTCARS) == 96
+    assert len(RECOMMENDED_GW_POTCARS) == 73
+
+    for symbol, directory in RECOMMENDED_PBE_POTCARS.items():
+        assert _potcar_directory_name(symbol, mapping={}, use_gw=False) == directory
+
+    for symbol, directory in RECOMMENDED_GW_POTCARS.items():
+        assert _potcar_directory_name(symbol, mapping={}, use_gw=True) == directory
+
+
+def test_explicit_potcar_map_overrides_recommended_tables():
+    """User overrides must still win over built-in recommended variants."""
+    mapping = {"Na": "Na"}
+
+    assert _potcar_directory_name("Na", mapping=mapping, use_gw=False) == "Na"
+    assert _potcar_directory_name("Na", mapping=mapping, use_gw=True) == "Na"
 
 
 def test_submit_jobs_dry_run_uses_labeling_manifest(tmp_path):
