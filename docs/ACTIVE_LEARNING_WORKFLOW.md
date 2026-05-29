@@ -491,8 +491,8 @@ NELM = 150
 You can also provide `potcar`, `kpoints`, or a complete `template_dir` under
 `labeling`; these files are copied into every calculation folder.
 
-For generated VASP files, use `source_tree` naming to preserve the generated
-folder structure while dropping the `.vasp` suffix from each calculation folder:
+For generated VASP files, PESMaker preserves the generated folder structure by
+default while dropping the `.vasp` suffix from each calculation folder:
 
 ```yaml
 labeling:
@@ -500,7 +500,6 @@ labeling:
   output_dir: labeling
   input_manifest: generated/manifest.jsonl
   incar: templates/vasp/INCAR
-  workdir_naming: source_tree
   command: /home/a4s5d/software/VASP/CPU_vasp.6.6.0/bin/vasp_std
 
 jobs:

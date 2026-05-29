@@ -243,7 +243,6 @@ labeling:
   output_dir: labeling
   input_manifest: generated/manifest.jsonl
   incar: templates/vasp/INCAR
-  workdir_naming: source_tree
   command: /home/a4s5d/software/VASP/CPU_vasp.6.6.0/bin/vasp_std
 
 dataset:

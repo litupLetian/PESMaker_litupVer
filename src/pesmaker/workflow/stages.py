@@ -216,7 +216,7 @@ def setup_labeling(config: PESMakerConfig) -> StageResult:
                 output_dir,
                 source_path,
                 index=index,
-                naming=str(config.labeling.options.get("workdir_naming", "indexed")),
+                naming=str(config.labeling.options.get("workdir_naming", "source_tree")),
                 source_root=source_root,
                 used_workdirs=used_workdirs,
             )

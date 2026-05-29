@@ -63,6 +63,7 @@ labeling:
   engine: vasp
   output_dir: {(tmp_path / 'labeling').as_posix()}
   incar: {incar.as_posix()}
+  workdir_naming: indexed
 training:
   model: nep
   output_dir: {(tmp_path / 'training').as_posix()}
@@ -105,7 +106,6 @@ generation:
   output_dir: {generated_dir.as_posix()}
 labeling:
   output_dir: {(tmp_path / 'labeling').as_posix()}
-  workdir_naming: source_tree
 jobs:
   sbatch_templates:
     labeling: {(tmp_path / 'vasp.sh').as_posix()}
