@@ -132,6 +132,83 @@ jobs:
     assert manifest_record["workdir"] == str(workdir)
 
 
+def test_labeling_setup_can_generate_potcar_from_library(tmp_path):
+    """VASP labeling setup can concatenate POTCAR files from a local library."""
+    generated_dir = tmp_path / "generated"
+    source_dir = generated_dir / "mp-105_Te"
+    source_dir.mkdir(parents=True)
+    source_path = source_dir / "structure_000000.vasp"
+    source_path.write_text(
+        "Te\n1.0\n1 0 0\n0 1 0\n0 0 1\nTe\n1\nDirect\n0 0 0\n",
+        encoding="utf-8",
+    )
+    (generated_dir / "manifest.jsonl").write_text(
+        json.dumps({"path": str(source_path)}) + "\n",
+        encoding="utf-8",
+    )
+    library = tmp_path / "potentials"
+    (library / "Te").mkdir(parents=True)
+    (library / "Te" / "POTCAR").write_text("POTCAR Te\n", encoding="utf-8")
+    config_path = tmp_path / "pesmaker.yaml"
+    config_path.write_text(
+        f"""project: potcar_test
+structures:
+  - POSCAR
+generation:
+  output_dir: {generated_dir.as_posix()}
+labeling:
+  output_dir: {(tmp_path / 'labeling').as_posix()}
+  potcar_library: {library.as_posix()}
+""",
+        encoding="utf-8",
+    )
+
+    assert main(["label-setup", str(config_path)]) == 0
+
+    workdir = tmp_path / "labeling" / "mp-105_Te" / "structure_000000"
+    assert (workdir / "POTCAR").read_text(encoding="utf-8") == "POTCAR Te\n"
+    assert (workdir / "POTCAR.spec").read_text(encoding="utf-8") == "Te\n"
+
+
+def test_labeling_setup_can_generate_gw_potcar_from_library(tmp_path):
+    """GW POTCAR selection should use the element_GW directory by default."""
+    generated_dir = tmp_path / "generated"
+    source_dir = generated_dir / "mp-105_Te"
+    source_dir.mkdir(parents=True)
+    source_path = source_dir / "structure_000000.vasp"
+    source_path.write_text(
+        "Te\n1.0\n1 0 0\n0 1 0\n0 0 1\nTe\n1\nDirect\n0 0 0\n",
+        encoding="utf-8",
+    )
+    (generated_dir / "manifest.jsonl").write_text(
+        json.dumps({"path": str(source_path)}) + "\n",
+        encoding="utf-8",
+    )
+    library = tmp_path / "potentials"
+    (library / "Te_GW").mkdir(parents=True)
+    (library / "Te_GW" / "POTCAR").write_text("POTCAR Te GW\n", encoding="utf-8")
+    config_path = tmp_path / "pesmaker.yaml"
+    config_path.write_text(
+        f"""project: potcar_gw_test
+structures:
+  - POSCAR
+generation:
+  output_dir: {generated_dir.as_posix()}
+labeling:
+  output_dir: {(tmp_path / 'labeling').as_posix()}
+  potcar_library: {library.as_posix()}
+  gw_potcar: true
+""",
+        encoding="utf-8",
+    )
+
+    assert main(["label-setup", str(config_path)]) == 0
+
+    workdir = tmp_path / "labeling" / "mp-105_Te" / "structure_000000"
+    assert (workdir / "POTCAR").read_text(encoding="utf-8") == "POTCAR Te GW\n"
+    assert (workdir / "POTCAR.spec").read_text(encoding="utf-8") == "Te_GW\n"
+
+
 def test_submit_jobs_dry_run_uses_labeling_manifest(tmp_path):
     """Batch submission should follow prepared labeling workdirs."""
     workdir = tmp_path / "labeling" / "calc_000000"

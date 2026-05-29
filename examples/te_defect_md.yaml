@@ -58,8 +58,8 @@ sampling:
 labeling:
   engine: vasp
   output_dir: labeling
-  input_manifest: generated/manifest.jsonl
   incar: templates/vasp/INCAR
+  potcar_library: /home/a4s5d/software/VASP/potentials
   command: /home/a4s5d/software/VASP/CPU_vasp.6.6.0/bin/vasp_std
 
 dataset:
