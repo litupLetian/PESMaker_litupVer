@@ -17,6 +17,7 @@
 
 from __future__ import annotations
 
+import gzip
 import json
 import shlex
 import shutil
@@ -231,6 +232,11 @@ def setup_labeling(config: PESMakerConfig) -> StageResult:
             incar_path = calc_dir / "INCAR"
             incar_path.write_text(incar, encoding="utf-8")
             _copy_optional_templates(config.labeling.options, calc_dir)
+            potcar_paths = _write_potcar_from_library(
+                config.labeling.options,
+                poscar_path,
+                calc_dir,
+            )
             submit_path = _write_submit_script(
                 config,
                 calc_dir,
@@ -239,7 +245,13 @@ def setup_labeling(config: PESMakerConfig) -> StageResult:
             )
             files.extend(
                 path
-                for path in (poscar_path, backup_path, incar_path, submit_path)
+                for path in (
+                    poscar_path,
+                    backup_path,
+                    incar_path,
+                    *potcar_paths,
+                    submit_path,
+                )
                 if path is not None
             )
             manifest.write(
@@ -468,6 +480,104 @@ def _copy_labeling_source_backup(
     backup_path = calc_dir / backup_name
     shutil.copy2(source_path, backup_path)
     return backup_path
+
+
+def _write_potcar_from_library(
+    options: dict[str, Any],
+    poscar_path: Path,
+    calc_dir: Path,
+) -> tuple[Path, ...]:
+    """Build POTCAR from a VASP potential library when configured."""
+    if options.get("potcar"):
+        return ()
+    library = _potcar_library_path(options)
+    if library is None:
+        return ()
+
+    symbols = _ordered_structure_symbols(poscar_path)
+    if not symbols:
+        raise ValueError(f"no elements found in {poscar_path}")
+
+    mapping = options.get("potcar_map", {})
+    if mapping is None:
+        mapping = {}
+    if not isinstance(mapping, dict):
+        raise ValueError("labeling.potcar_map must be a mapping")
+
+    use_gw = bool(options.get("gw_potcar", options.get("potcar_gw", False)))
+    chunks: list[bytes] = []
+    chosen: list[str] = []
+    for symbol in symbols:
+        directory_name = _potcar_directory_name(
+            symbol,
+            mapping=mapping,
+            use_gw=use_gw,
+        )
+        potcar_file = _find_potcar_file(library / directory_name)
+        if potcar_file is None:
+            raise ValueError(
+                f"missing POTCAR for {symbol}: expected {library / directory_name / 'POTCAR'}"
+            )
+        chunks.append(_read_potcar_bytes(potcar_file))
+        chosen.append(directory_name)
+
+    potcar_path = calc_dir / "POTCAR"
+    potcar_path.write_bytes(_join_potcar_chunks(chunks))
+    spec_path = calc_dir / "POTCAR.spec"
+    spec_path.write_text("\n".join(chosen) + "\n", encoding="utf-8")
+    return (potcar_path, spec_path)
+
+
+def _potcar_library_path(options: dict[str, Any]) -> Path | None:
+    for key in ("potcar_library", "pbe_path", "potcar_path"):
+        value = options.get(key)
+        if value:
+            return Path(str(value))
+    return None
+
+
+def _ordered_structure_symbols(poscar_path: Path) -> list[str]:
+    atoms = load_structure(poscar_path)
+    symbols: list[str] = []
+    for symbol in atoms.get_chemical_symbols():
+        if symbol not in symbols:
+            symbols.append(symbol)
+    return symbols
+
+
+def _potcar_directory_name(
+    symbol: str,
+    *,
+    mapping: dict[str, Any],
+    use_gw: bool,
+) -> str:
+    mapped = mapping.get(symbol)
+    if mapped:
+        return str(mapped)
+    return f"{symbol}_GW" if use_gw else symbol
+
+
+def _find_potcar_file(directory: Path) -> Path | None:
+    for name in ("POTCAR", "POTCAR.gz"):
+        candidate = directory / name
+        if candidate.exists() and candidate.is_file():
+            return candidate
+    return None
+
+
+def _read_potcar_bytes(path: Path) -> bytes:
+    if path.suffix == ".gz":
+        return gzip.decompress(path.read_bytes())
+    return path.read_bytes()
+
+
+def _join_potcar_chunks(chunks: list[bytes]) -> bytes:
+    output = bytearray()
+    for chunk in chunks:
+        output.extend(chunk)
+        if chunk and not chunk.endswith(b"\n"):
+            output.extend(b"\n")
+    return bytes(output)
 
 
 def _stage_submit_scripts(config: PESMakerConfig, stage: str) -> list[Path]:

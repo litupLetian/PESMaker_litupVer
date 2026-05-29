@@ -498,8 +498,8 @@ default while dropping the `.vasp` suffix from each calculation folder:
 labeling:
   engine: vasp
   output_dir: labeling
-  input_manifest: generated/manifest.jsonl
   incar: templates/vasp/INCAR
+  potcar_library: /home/a4s5d/software/VASP/potentials
   command: /home/a4s5d/software/VASP/CPU_vasp.6.6.0/bin/vasp_std
 
 jobs:
@@ -517,11 +517,16 @@ labeling/
       POSCAR
       structure_000000.vasp-bak
       INCAR
+      POTCAR
+      POTCAR.spec
       submit.sh
 ```
 
 The original generated structure is backed up by default. Set
 `backup_source: false` under `labeling` only if those backups are not wanted.
+If `potcar_library` is set, PESMaker writes `POTCAR` automatically from
+`<potcar_library>/<element>/POTCAR`. For GW potentials, set `gw_potcar: true`
+and PESMaker will use directories such as `Te_GW`.
 
 Submit the prepared jobs with:
 
