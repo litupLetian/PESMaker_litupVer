@@ -665,15 +665,44 @@ Templates can use these placeholders:
 {vasp_ncore}        # generated VASP NCORE
 ```
 
+The same resource placeholders can be used in `jobs.launcher`.
+
 A default CPU-style Slurm script looks like:
 
 ```bash
-#!/bin/bash
+#!/bin/bash -l
 #SBATCH --job-name={job_name}
+#SBATCH --output=out.%j
+#SBATCH --error=err.%j
 #SBATCH --nodes={nodes}
 #SBATCH --ntasks-per-node={cores_cpu}
+#SBATCH --cpus-per-task=1
+
+set -euo pipefail
+
+cd "{workdir}"
+
+export OMP_NUM_THREADS=${OMP_NUM_THREADS:-1}
+ulimit -s unlimited
+
+echo "--------------------------------"
+echo "Job started at $(date)"
+echo "Running on node(s): ${SLURM_NODELIST:-unknown}"
+echo "Using total tasks: ${SLURM_NTASKS:-unknown}"
+echo "Working directory: $(pwd)"
+echo "--------------------------------"
 
 {launch_command}
+
+echo "Simulation finished at $(date)"
+```
+
+`jobs.launcher` defaults to `srun`. On clusters where the VASP MPI stack is
+configured around `mpirun`, set:
+
+```yaml
+jobs:
+  launcher: mpirun -np {cores_cpu}
 ```
 
 For GPU jobs, set `gpus`:

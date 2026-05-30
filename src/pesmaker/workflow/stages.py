@@ -1085,7 +1085,7 @@ def _write_submit_script(
     template_path = _job_template_path(config, stage)
     job_name = f"{config.project}-{stage}"
     resources = resources or _job_resources(config)
-    launch_command = _launch_command(command, resources.launcher)
+    launch_command = _launch_command(command, resources.launcher, resources)
     if template_path:
         text = template_path.read_text(encoding="utf-8").format(
             command=command,
@@ -1104,6 +1104,7 @@ def _write_submit_script(
         text = _default_submit_script(
             launch_command=launch_command,
             job_name=job_name,
+            workdir=workdir,
             resources=resources,
         )
     path = workdir / "submit.sh"
@@ -1271,25 +1272,61 @@ def _factor_near(value: int, target: float, *, prefer_below: bool = False) -> in
     return min(factors, key=lambda factor: (abs(factor - target), factor))
 
 
-def _launch_command(command: str, launcher: str) -> str:
-    return f"{launcher} {command}".strip() if launcher else command
+def _launch_command(command: str, launcher: str, resources: JobResources) -> str:
+    if not launcher:
+        return command
+    formatted_launcher = launcher.format(
+        nodes=resources.nodes,
+        cores_cpu=resources.cores_cpu,
+        ntasks_per_node=resources.cores_cpu,
+        gpus=resources.gpus,
+        vasp_kpar=resources.vasp_kpar,
+        vasp_ncore=resources.vasp_ncore,
+    )
+    return f"{formatted_launcher} {command}".strip()
 
 
 def _default_submit_script(
     *,
     launch_command: str,
     job_name: str,
+    workdir: Path,
     resources: JobResources,
 ) -> str:
     lines = [
-        "#!/bin/bash",
+        "#!/bin/bash -l",
         f"#SBATCH --job-name={job_name}",
+        "#SBATCH --output=out.%j",
+        "#SBATCH --error=err.%j",
         f"#SBATCH --nodes={resources.nodes}",
         f"#SBATCH --ntasks-per-node={resources.cores_cpu}",
+        "#SBATCH --cpus-per-task=1",
     ]
     if resources.gpus:
         lines.append(f"#SBATCH --gres=gpu:{resources.gpus}")
-    lines.extend(["", launch_command, ""])
+    lines.extend(
+        [
+            "",
+            "set -euo pipefail",
+            "",
+            f'cd "{workdir}"',
+            "",
+            "export OMP_NUM_THREADS=${OMP_NUM_THREADS:-1}",
+            "ulimit -s unlimited",
+            "",
+            'echo "--------------------------------"',
+            'echo "Job started at $(date)"',
+            'echo "Running on node(s): ${SLURM_NODELIST:-unknown}"',
+            'echo "Using total tasks: ${SLURM_NTASKS:-unknown}"',
+            'echo "Working directory: $(pwd)"',
+            'echo "--------------------------------"',
+            "",
+            launch_command,
+            "",
+            'echo "Simulation finished at $(date)"',
+            "",
+        ]
+    )
     return "\n".join(lines)
 
 
