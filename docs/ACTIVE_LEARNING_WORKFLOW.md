@@ -490,8 +490,15 @@ For CPU VASP jobs, PESMaker also writes `KPAR` and `NCORE`. `KPAR` defaults to
 `2` when `jobs.cores_cpu` is even, otherwise `1`; `NCORE` is then chosen as a
 factor inside each KPAR group. For example, `cores_cpu: 36` gives `KPAR = 2`
 and `NCORE = 3`. PESMaker does not write `NPAR`; VASP treats it as a legacy
-alternative to `NCORE`. Set `jobs.kpar` or `jobs.ncore` when a cluster, k-point
-mesh, or benchmark suggests a manual override.
+alternative to `NCORE`. Set `jobs.vasp_kpar` or `jobs.vasp_ncore` when a
+cluster, k-point mesh, or benchmark suggests a manual override:
+
+```yaml
+jobs:
+  cores_cpu: 36
+  vasp_kpar: 2
+  vasp_ncore: 6
+```
 
 You can also provide `potcar`, `kpoints`, or a complete `template_dir` under
 `labeling`; these files are copied into every calculation folder.
@@ -511,6 +518,8 @@ labeling:
 jobs:
   submit_command: sbatch
   cores_cpu: 36
+  # vasp_kpar: 2
+  # vasp_ncore: 6
   sub_file: templates/sbatch/vasp_cpu_36.sh
 ```
 
@@ -523,7 +532,7 @@ without its file suffix.
 
 Each prepared calculation is recorded in `labeling_manifest.jsonl` with the
 source file, workdir, input directory, input mode, relative path, and resource
-settings such as `cores_cpu`, `gpus`, `kpar`, and `ncore`.
+settings such as `cores_cpu`, `gpus`, `vasp_kpar`, and `vasp_ncore`.
 
 This writes folders such as:
 
@@ -652,8 +661,8 @@ Templates can use these placeholders:
 {cores_cpu}         # CPU cores per node
 {ntasks_per_node}   # alias for cores_cpu
 {gpus}              # GPUs per node
-{kpar}              # generated VASP KPAR
-{ncore}             # generated VASP NCORE
+{vasp_kpar}         # generated VASP KPAR
+{vasp_ncore}        # generated VASP NCORE
 ```
 
 A default CPU-style Slurm script looks like:

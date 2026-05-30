@@ -74,6 +74,8 @@ labeling:
 jobs:
   submit_command: sbatch
   cores_cpu: 36
+  # vasp_kpar: 2
+  # vasp_ncore: 6
   sub_file: templates/sbatch/vasp_cpu_36.sh
 ```
 
@@ -81,12 +83,14 @@ jobs:
 recursively scans that folder for `POSCAR`, `CONTCAR`, `*.vasp`, `*.poscar`,
 `*.cif`, `*.extxyz`, and `*.xyz` files. Each prepared job keeps the source
 path, uses the source path without its suffix as the calculation folder name,
-and records resource fields such as `cores_cpu`, `gpus`, `kpar`, and `ncore`.
+and records resource fields such as `cores_cpu`, `gpus`, `vasp_kpar`, and
+`vasp_ncore`.
 
 For CPU VASP jobs, `KPAR` defaults to `2` when `jobs.cores_cpu` is even, and
 PESMaker chooses `NCORE` inside each KPAR group; for example, `cores_cpu: 36`
 generates `KPAR = 2` and `NCORE = 3`. PESMaker writes `NCORE`, not legacy
-`NPAR`. For GPU jobs, set `gpus: <count>` under `jobs`.
+`NPAR`. Override them with `jobs.vasp_kpar` and `jobs.vasp_ncore` when needed.
+For GPU jobs, set `gpus: <count>` under `jobs`.
 
 ## `pesmaker submit`
 
