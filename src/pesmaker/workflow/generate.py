@@ -255,7 +255,11 @@ def _manifest_record(item: GeneratedStructure) -> dict[str, str | int | list[int
     }
 
 
-def format_generate_summary(result: GenerateResult) -> str:
+def format_generate_summary(
+    result: GenerateResult,
+    *,
+    include_details: bool = True,
+) -> str:
     """Render a grouped, human-readable generation summary."""
     task_counts: dict[str, int] = defaultdict(int)
     task_supercells: dict[str, tuple[int, int, int]] = {}
@@ -287,7 +291,7 @@ def format_generate_summary(result: GenerateResult) -> str:
         f"{_generation_complete_title(result)}.",
         f"Output directory : {result.output_dir}",
         f"Manifest         : {result.output_dir / 'manifest.jsonl'}",
-        f"Summary          : {result.summary_path}",
+        f"Details          : {result.summary_path}",
         "Generation tasks:",
     ]
     show_task_names = len(task_counts) > 1 or any(task != "default" for task in task_counts)
@@ -307,6 +311,8 @@ def format_generate_summary(result: GenerateResult) -> str:
             f"    per input: "
             f"{_task_per_input_summary(source_type_counts, task, task_sources)}"
         )
+        if not include_details:
+            continue
         lines.append("    details:")
         for source, _source_count in task_sources:
             type_summary = _generation_type_summary(

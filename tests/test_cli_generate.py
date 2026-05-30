@@ -102,15 +102,15 @@ generation:
     assert "Generated structures" not in output
     assert f"Output directory : {output_dir}" in output
     assert f"Manifest         : {output_dir / 'manifest.jsonl'}" in output
-    assert f"Summary          : {output_dir / 'generation_summary.txt'}" in output
+    assert f"Details          : {output_dir / 'generation_summary.txt'}" in output
     assert "Generation tasks:" in output
     assert "  - 1 input(s) -> 2 structure(s), supercell=(4, 4, 4)" in output
     assert "    per input: 2 perturb structure(s)" in output
-    assert "    details:" in output
-    assert f"      - input: {cif_path}" in output
-    assert "        generated: 2 perturb structure(s)" in output
-    assert "        outputs:" in output
-    assert f"          - perturb -> {output_dir / 'te'} (2)" in output
+    assert "    details:" not in output
+    assert f"      - input: {cif_path}" not in output
+    assert "        generated: 2 perturb structure(s)" not in output
+    assert "        outputs:" not in output
+    assert f"          - perturb -> {output_dir / 'te'} (2)" not in output
     assert "perturb files ->" not in output
     assert "pristine ->" not in output
     assert output.endswith("\n\n")
@@ -223,6 +223,7 @@ generation:
     assert len(list(output_dir.glob("te2d/*/*.vasp"))) == 4
     summary = (output_dir / "generation_summary.txt").read_text(encoding="utf-8")
     assert "Structure generation complete." in summary
+    assert f"Details          : {output_dir / 'generation_summary.txt'}" in summary
     assert "Generation tasks:" in summary
     assert "Input structures" not in summary
     assert "per input: 1 surface, 3 defect structure(s)" in summary

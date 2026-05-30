@@ -294,7 +294,7 @@ def _print_generate_summary(result: GenerateResult) -> None:
     Args:
         result: Completed generation result returned by the workflow layer.
     """
-    print(format_generate_summary(result), end="")
+    print(format_generate_summary(result, include_details=False), end="")
     print()
 
 
