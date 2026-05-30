@@ -70,8 +70,8 @@ class JobResources:
     nodes: int
     cores_cpu: int
     gpus: int
-    kpar: int
-    ncore: int
+    vasp_kpar: int
+    vasp_ncore: int
     launcher: str
 
 
@@ -463,8 +463,8 @@ def setup_labeling(config: PESMakerConfig) -> StageResult:
                 "gpus": resources.gpus,
             }
             if not resources.gpus:
-                record_data["kpar"] = resources.kpar
-                record_data["ncore"] = resources.ncore
+                record_data["vasp_kpar"] = resources.vasp_kpar
+                record_data["vasp_ncore"] = resources.vasp_ncore
             for key in (
                 "input_dir",
                 "input_mode",
@@ -1096,8 +1096,8 @@ def _write_submit_script(
             cores_cpu=resources.cores_cpu,
             ntasks_per_node=resources.cores_cpu,
             gpus=resources.gpus,
-            kpar=resources.kpar,
-            ncore=resources.ncore,
+            vasp_kpar=resources.vasp_kpar,
+            vasp_ncore=resources.vasp_ncore,
             launcher=resources.launcher,
         )
     else:
@@ -1150,26 +1150,33 @@ def _job_resources(
         "gpus",
         default=_nonnegative_int_option(options, "gpus_gpu", default=0),
     )
-    kpar = _positive_int_option(options, "kpar", default=_default_vasp_kpar(cores_cpu))
-    if cores_cpu % kpar != 0:
-        raise ValueError("jobs.kpar must divide jobs.cores_cpu")
-    if "ncore" in options:
-        ncore = _positive_int_option(options, "ncore", default=1)
-        if (cores_cpu // kpar) % ncore != 0:
-            raise ValueError("jobs.ncore must divide jobs.cores_cpu / jobs.kpar")
+    _reject_legacy_vasp_parallel_options(options)
+    vasp_kpar = _positive_int_option(
+        options,
+        "vasp_kpar",
+        default=_default_vasp_kpar(cores_cpu),
+    )
+    if cores_cpu % vasp_kpar != 0:
+        raise ValueError("jobs.vasp_kpar must divide jobs.cores_cpu")
+    if "vasp_ncore" in options:
+        vasp_ncore = _positive_int_option(options, "vasp_ncore", default=1)
+        if (cores_cpu // vasp_kpar) % vasp_ncore != 0:
+            raise ValueError(
+                "jobs.vasp_ncore must divide jobs.cores_cpu / jobs.vasp_kpar"
+            )
     else:
-        _, ncore = _vasp_parallel_factors(
+        _, vasp_ncore = _vasp_parallel_factors(
             cores_cpu,
             atom_count=atom_count,
-            kpar=kpar,
+            kpar=vasp_kpar,
         )
     launcher = str(options.get("launcher", "srun")).strip()
     return JobResources(
         nodes=nodes,
         cores_cpu=cores_cpu,
         gpus=gpus,
-        kpar=kpar,
-        ncore=ncore,
+        vasp_kpar=vasp_kpar,
+        vasp_ncore=vasp_ncore,
         launcher=launcher,
     )
 
@@ -1184,6 +1191,13 @@ def _positive_int_option(
     if value < 1:
         raise ValueError(f"jobs.{key} must be a positive integer")
     return value
+
+
+def _reject_legacy_vasp_parallel_options(options: dict[str, Any]) -> None:
+    if "kpar" in options:
+        raise ValueError("jobs.kpar has been renamed to jobs.vasp_kpar")
+    if "ncore" in options:
+        raise ValueError("jobs.ncore has been renamed to jobs.vasp_ncore")
 
 
 def _nonnegative_int_option(
@@ -1285,13 +1299,13 @@ def _prepare_labeling_incar(text: str, resources: JobResources) -> str:
     text = _set_incar_value(
         text,
         "KPAR",
-        str(resources.kpar),
+        str(resources.vasp_kpar),
         "K-point parallel groups",
     )
     text = _set_incar_value(
         text,
         "NCORE",
-        str(resources.ncore),
+        str(resources.vasp_ncore),
         "MPI ranks per band group",
     )
     return _ensure_trailing_newline(text)

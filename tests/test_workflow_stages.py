@@ -230,8 +230,8 @@ labeling:
     )
     assert manifest_records[0]["cores_cpu"] == 1
     assert manifest_records[0]["gpus"] == 0
-    assert manifest_records[0]["kpar"] == 1
-    assert manifest_records[0]["ncore"] == 1
+    assert manifest_records[0]["vasp_kpar"] == 1
+    assert manifest_records[0]["vasp_ncore"] == 1
 
 
 def test_labeling_setup_scans_generic_xyz_without_manifest(tmp_path):
@@ -323,6 +323,85 @@ jobs:
     assert "set -euo pipefail" not in submit_text
     assert 'cd "$(dirname "$0")"' not in submit_text
     assert "srun /opt/vasp/vasp_std" in submit_text
+
+
+def test_labeling_setup_uses_manual_vasp_parallel_options(tmp_path):
+    """VASP-specific parallel overrides should use explicit jobs.vasp_* keys."""
+    generated_dir = tmp_path / "generated"
+    source_dir = generated_dir / "mp-105_Te"
+    source_dir.mkdir(parents=True)
+    source_path = source_dir / "structure_000000.vasp"
+    source_path.write_text(
+        "Te\n1.0\n1 0 0\n0 1 0\n0 0 1\nTe\n1\nDirect\n0 0 0\n",
+        encoding="utf-8",
+    )
+    (generated_dir / "manifest.jsonl").write_text(
+        json.dumps({"path": str(source_path)}) + "\n",
+        encoding="utf-8",
+    )
+    config_path = tmp_path / "pesmaker.yaml"
+    config_path.write_text(
+        f"""project: manual_vasp_parallel_test
+generation:
+  output_dir: {generated_dir.as_posix()}
+labeling:
+  output_dir: {(tmp_path / 'labeling').as_posix()}
+jobs:
+  cores_cpu: 36
+  vasp_kpar: 2
+  vasp_ncore: 6
+""",
+        encoding="utf-8",
+    )
+
+    assert main(["scf-setup", str(config_path)]) == 0
+
+    workdir = tmp_path / "labeling" / "mp-105_Te" / "structure_000000"
+    incar_text = (workdir / "INCAR").read_text(encoding="utf-8")
+    manifest_record = json.loads(
+        (tmp_path / "labeling" / "labeling_manifest.jsonl").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert "KPAR = 2" in incar_text
+    assert "NCORE = 6" in incar_text
+    assert manifest_record["vasp_kpar"] == 2
+    assert manifest_record["vasp_ncore"] == 6
+
+
+def test_labeling_setup_rejects_old_parallel_option_names(tmp_path, capsys):
+    """Old generic parallel option names should fail with the new VASP names."""
+    generated_dir = tmp_path / "generated"
+    source_dir = generated_dir / "mp-105_Te"
+    source_dir.mkdir(parents=True)
+    source_path = source_dir / "structure_000000.vasp"
+    source_path.write_text(
+        "Te\n1.0\n1 0 0\n0 1 0\n0 0 1\nTe\n1\nDirect\n0 0 0\n",
+        encoding="utf-8",
+    )
+    (generated_dir / "manifest.jsonl").write_text(
+        json.dumps({"path": str(source_path)}) + "\n",
+        encoding="utf-8",
+    )
+
+    for old_key, new_key in (("kpar", "vasp_kpar"), ("ncore", "vasp_ncore")):
+        config_path = tmp_path / f"{old_key}.yaml"
+        config_path.write_text(
+            f"""project: old_parallel_option_test
+generation:
+  output_dir: {generated_dir.as_posix()}
+labeling:
+  output_dir: {(tmp_path / f'labeling_{old_key}').as_posix()}
+jobs:
+  cores_cpu: 36
+  {old_key}: 2
+""",
+            encoding="utf-8",
+        )
+
+        assert main(["scf-setup", str(config_path)]) == 2
+        captured = capsys.readouterr()
+        assert f"jobs.{old_key} has been renamed to jobs.{new_key}" in captured.err
 
 
 def test_vasp_parallel_factors_follow_requested_cpu_cores():
