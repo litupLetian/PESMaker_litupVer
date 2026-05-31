@@ -1086,17 +1086,29 @@ def _write_submit_script(
     resources = resources or _job_resources(config)
     if template_path:
         ntasks = resources.nodes * resources.cores_cpu
-        text = template_path.read_text(encoding="utf-8").format(
+        text = _format_submit_template(
+            template_path.read_text(encoding="utf-8"),
+            {
+                "command": command,
+                "job_name": job_name,
+                "workdir": str(workdir),
+                "nodes": resources.nodes,
+                "ntasks": ntasks,
+                "cores_cpu": resources.cores_cpu,
+                "ntasks_per_node": resources.cores_cpu,
+                "gpus": resources.gpus,
+                "vasp_kpar": resources.vasp_kpar,
+                "vasp_ncore": resources.vasp_ncore,
+            },
+        )
+        text = _normalize_submit_template(
+            text,
             command=command,
             job_name=job_name,
             workdir=workdir,
-            nodes=resources.nodes,
-            ntasks=ntasks,
-            cores_cpu=resources.cores_cpu,
-            ntasks_per_node=resources.cores_cpu,
-            gpus=resources.gpus,
-            vasp_kpar=resources.vasp_kpar,
-            vasp_ncore=resources.vasp_ncore,
+            stage=stage,
+            engine=_stage_engine(config, stage),
+            resources=resources,
         )
     else:
         text = _default_submit_script(
@@ -1145,6 +1157,107 @@ def _stage_engine(config: PESMakerConfig, stage: str) -> str:
     if stage == "training":
         return config.training.engine
     return stage
+
+
+def _format_submit_template(text: str, values: dict[str, object]) -> str:
+    for key, value in values.items():
+        text = text.replace(f"{{{key}}}", str(value))
+    return text
+
+
+def _normalize_submit_template(
+    text: str,
+    *,
+    command: str,
+    job_name: str,
+    workdir: Path,
+    stage: str,
+    engine: str,
+    resources: JobResources,
+) -> str:
+    ntasks = resources.nodes * resources.cores_cpu
+    lines: list[str] = []
+    for line in text.splitlines():
+        if _is_generated_workdir_cd(line, workdir):
+            continue
+        updated = _set_sbatch_directive(line, "--job-name", job_name)
+        if updated is None:
+            updated = _set_sbatch_directive(line, "--ntasks", str(ntasks))
+        if updated is None:
+            updated = _set_sbatch_directive(
+                line,
+                "--ntasks-per-node",
+                str(resources.cores_cpu),
+            )
+        if updated is None:
+            updated = _replace_vasp_run_command(
+                line,
+                command=command,
+                stage=stage,
+                engine=engine,
+                resources=resources,
+            )
+        lines.append(updated if updated is not None else line)
+    return "\n".join(lines) + "\n"
+
+
+def _set_sbatch_directive(line: str, option: str, value: str) -> str | None:
+    prefix = line[: len(line) - len(line.lstrip())]
+    stripped = line.lstrip()
+    if not stripped.startswith("#SBATCH"):
+        return None
+    rest = stripped[len("#SBATCH") :].lstrip()
+    if rest.startswith(f"{option}="):
+        suffix = _directive_suffix(rest[len(option) + 1 :])
+        return f"{prefix}#SBATCH {option}={value}{suffix}"
+    if rest == option or rest.startswith(f"{option} "):
+        suffix = _directive_suffix(rest[len(option) :].lstrip())
+        return f"{prefix}#SBATCH {option}={value}{suffix}"
+    return None
+
+
+def _directive_suffix(value_text: str) -> str:
+    comment_index = value_text.find(" #")
+    if comment_index >= 0:
+        return value_text[comment_index:]
+    return ""
+
+
+def _is_generated_workdir_cd(line: str, workdir: Path) -> bool:
+    stripped = line.strip()
+    workdir_text = str(workdir)
+    return stripped in {
+        f'cd "{workdir_text}"',
+        f"cd '{workdir_text}'",
+        f"cd {workdir_text}",
+    }
+
+
+def _replace_vasp_run_command(
+    line: str,
+    *,
+    command: str,
+    stage: str,
+    engine: str,
+    resources: JobResources,
+) -> str | None:
+    if stage != "labeling" or engine.lower() != "vasp":
+        return None
+    stripped = line.strip()
+    if not stripped or stripped.startswith("#"):
+        return None
+    lower = stripped.lower()
+    if lower.startswith(("echo ", "export ", "module ", "source ", "ulimit ", "set ")):
+        return None
+    if "vasp" not in lower:
+        return None
+    prefix = line[: len(line) - len(line.lstrip())]
+    return prefix + _default_run_command(
+        command,
+        stage=stage,
+        engine=engine,
+        resources=resources,
+    )
 
 
 def _job_resources(

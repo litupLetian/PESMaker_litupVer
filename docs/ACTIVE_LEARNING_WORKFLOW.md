@@ -665,6 +665,14 @@ Templates can use these placeholders:
 {vasp_ncore}        # generated VASP NCORE
 ```
 
+Placeholders are optional for common Slurm fields. When a user-provided
+`sub_file` already contains `#SBATCH --job-name`, `#SBATCH --ntasks`, or a VASP
+run line such as `mpirun /path/to/vasp_std`, PESMaker rewrites those values for
+each calculation folder using the generated folder name, `jobs.cores_cpu`, and
+`labeling.command`. This means a site template can keep machine-specific lines
+such as `#SBATCH --partition`, `#SBATCH --account`, `module purge`, and
+`source /path/to/ENV` while PESMaker fills the per-job values.
+
 A default CPU-style Slurm script looks like:
 
 ```bash

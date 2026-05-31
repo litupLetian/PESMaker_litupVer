@@ -185,12 +185,69 @@ jobs:
     workdir = tmp_path / "labeling" / "mp-105_Te" / "structure_000000"
     assert (workdir / "POSCAR").read_text(encoding="utf-8") == source_text
     incar_text = (workdir / "INCAR").read_text(encoding="utf-8")
+    submit_text = (workdir / "submit.sh").read_text(encoding="utf-8")
     assert "NSW = 0\n" in incar_text
     assert "KPAR = 2" in incar_text
     assert "NCORE = 3" in incar_text
-    assert "/opt/vasp/vasp_std" in (workdir / "submit.sh").read_text(
-        encoding="utf-8"
+    assert f'cd "{workdir}"' not in submit_text
+    assert "#SBATCH --job-name=structure_000000" in submit_text
+    assert "mpirun /opt/vasp/vasp_std" in submit_text
+
+
+def test_labeling_setup_normalizes_literal_submit_template(tmp_path):
+    """User submit scripts should inherit generated job names and resources."""
+    generated_dir = tmp_path / "generated"
+    source_dir = generated_dir / "mp-105_Te"
+    source_dir.mkdir(parents=True)
+    source_path = source_dir / "perturb_000000.vasp"
+    source_path.write_text(
+        "Te\n1.0\n1 0 0\n0 1 0\n0 0 1\nTe\n1\nDirect\n0 0 0\n",
+        encoding="utf-8",
     )
+    (generated_dir / "manifest.jsonl").write_text(
+        json.dumps({"path": str(source_path)}) + "\n",
+        encoding="utf-8",
+    )
+    sub_file = tmp_path / "sub.sh"
+    sub_file.write_text(
+        """#!/bin/bash -l
+#SBATCH --job-name=VASP-CPU
+#SBATCH --output=out.%j
+#SBATCH --error=err.%j
+#SBATCH --nodes=1
+#SBATCH --ntasks=12              # total MPI ranks
+#SBATCH --cpus-per-task=1
+
+echo "Running on node: ${SLURM_NODELIST:-unknown}"
+mpirun /old/software/vasp_std
+""",
+        encoding="utf-8",
+    )
+    config_path = tmp_path / "pesmaker.yaml"
+    config_path.write_text(
+        f"""project: submit_template_test
+generation:
+  output_dir: {generated_dir.as_posix()}
+labeling:
+  output_dir: {(tmp_path / 'labeling').as_posix()}
+  command: /opt/vasp/vasp_std
+jobs:
+  cores_cpu: 36
+  sub_file: {sub_file.as_posix()}
+""",
+        encoding="utf-8",
+    )
+
+    assert main(["scf-setup", str(config_path)]) == 0
+
+    workdir = tmp_path / "labeling" / "mp-105_Te" / "perturb_000000"
+    submit_text = (workdir / "submit.sh").read_text(encoding="utf-8")
+    assert "#SBATCH --job-name=perturb_000000" in submit_text
+    assert "#SBATCH --ntasks=36" in submit_text
+    assert "# total MPI ranks" in submit_text
+    assert "mpirun /opt/vasp/vasp_std" in submit_text
+    assert "/old/software/vasp_std" not in submit_text
+    assert "${SLURM_NODELIST:-unknown}" in submit_text
 
 
 def test_labeling_setup_scans_explicit_input_dir_without_manifest(tmp_path):

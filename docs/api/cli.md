@@ -94,6 +94,11 @@ The default CPU VASP submit script uses `mpirun {command}` and assumes it is
 submitted from the calculation directory. `pesmaker submit` does this
 automatically. For GPU jobs, set `gpus: <count>` under `jobs`.
 
+For user-provided `jobs.sub_file` templates, placeholders are optional for
+common Slurm fields. PESMaker rewrites existing `#SBATCH --job-name`,
+`#SBATCH --ntasks`, and VASP run-command lines from the generated folder name,
+`jobs.cores_cpu`, and `labeling.command`.
+
 ## `pesmaker submit`
 
 Submit prepared `submit.sh` files. By default this submits SCF jobs:
