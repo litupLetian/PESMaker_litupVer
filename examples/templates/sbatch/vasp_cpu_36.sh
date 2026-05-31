@@ -5,11 +5,9 @@
 #SBATCH --partition=normal
 #SBATCH --account=sait
 #SBATCH --nodes={nodes}
-#SBATCH --ntasks-per-node={cores_cpu}
+#SBATCH --ntasks={ntasks}
 #SBATCH --cpus-per-task=1
 #SBATCH --exclusive
-
-cd "{workdir}"
 
 module purge
 source /home/a4s5d/software/VASP/CPU_vasp.6.6.0/ENV
@@ -26,6 +24,6 @@ echo "Using total cores: $SLURM_NTASKS"
 echo "Working directory: $(pwd)"
 echo "--------------------------------"
 
-mpirun -np {cores_cpu} {command}
+mpirun {command}
 
 echo "Simulation finished at $(date)"

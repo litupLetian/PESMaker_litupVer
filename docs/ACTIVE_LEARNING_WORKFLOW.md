@@ -653,10 +653,11 @@ jobs:
 Templates can use these placeholders:
 
 ```text
-{job_name}          # generated stage job name
+{job_name}          # generated from the calculation folder name
 {workdir}           # stage working directory
 {command}           # engine command, such as gpumd, vasp_std, or nep
 {nodes}             # jobs.nodes, default 1
+{ntasks}            # total MPI tasks, nodes * cores_cpu
 {cores_cpu}         # CPU cores per node
 {ntasks_per_node}   # alias for cores_cpu
 {gpus}              # GPUs per node
@@ -672,12 +673,10 @@ A default CPU-style Slurm script looks like:
 #SBATCH --output=out.%j
 #SBATCH --error=err.%j
 #SBATCH --nodes={nodes}
-#SBATCH --ntasks-per-node={cores_cpu}
+#SBATCH --ntasks={ntasks}
 #SBATCH --cpus-per-task=1
 
 set -euo pipefail
-
-cd "{workdir}"
 
 export OMP_NUM_THREADS=${OMP_NUM_THREADS:-1}
 ulimit -s unlimited
@@ -689,10 +688,15 @@ echo "Using total tasks: ${SLURM_NTASKS:-unknown}"
 echo "Working directory: $(pwd)"
 echo "--------------------------------"
 
-{command}
+mpirun {command}
 
 echo "Simulation finished at $(date)"
 ```
+
+The default script assumes it is submitted from the calculation directory.
+`pesmaker submit` does this automatically; for manual submission, run
+`sbatch submit.sh` inside the folder that contains `INCAR`, `POSCAR`, `POTCAR`,
+and `submit.sh`.
 
 For GPU jobs, set `gpus`:
 

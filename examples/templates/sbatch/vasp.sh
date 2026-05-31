@@ -3,12 +3,10 @@
 #SBATCH --output=out.%j
 #SBATCH --error=err.%j
 #SBATCH --nodes={nodes}
-#SBATCH --ntasks-per-node={cores_cpu}
+#SBATCH --ntasks={ntasks}
 #SBATCH --cpus-per-task=1
 
 set -euo pipefail
-
-cd "{workdir}"
 
 export OMP_NUM_THREADS=${OMP_NUM_THREADS:-1}
 ulimit -s unlimited
@@ -20,6 +18,6 @@ echo "Using total tasks: ${SLURM_NTASKS:-unknown}"
 echo "Working directory: $(pwd)"
 echo "--------------------------------"
 
-{command}
+mpirun {command}
 
 echo "Simulation finished at $(date)"
