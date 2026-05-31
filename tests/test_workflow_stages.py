@@ -173,7 +173,9 @@ jobs:
     assert main(["scf-setup", str(config_path)]) == 0
 
     workdir = tmp_path / "labeling" / "mp-105_Te" / "structure_000000"
-    assert (workdir / "POSCAR").read_text(encoding="utf-8") == source_text
+    poscar_lines = (workdir / "POSCAR").read_text(encoding="utf-8").splitlines()
+    assert poscar_lines[5].split() == ["Te"]
+    assert poscar_lines[6].split() == ["1"]
     assert (workdir / "structure_000000.vasp-bak").read_text(
         encoding="utf-8"
     ) == source_text
@@ -227,7 +229,9 @@ jobs:
     assert main(["scf-setup", str(config_path)]) == 0
 
     workdir = tmp_path / "labeling" / "mp-105_Te" / "structure_000000"
-    assert (workdir / "POSCAR").read_text(encoding="utf-8") == source_text
+    poscar_lines = (workdir / "POSCAR").read_text(encoding="utf-8").splitlines()
+    assert poscar_lines[5].split() == ["Te"]
+    assert poscar_lines[6].split() == ["1"]
     incar_text = (workdir / "INCAR").read_text(encoding="utf-8")
     submit_text = (workdir / "submit.sh").read_text(encoding="utf-8")
     assert "NSW = 0\n" in incar_text
@@ -236,6 +240,64 @@ jobs:
     assert f'cd "{workdir}"' not in submit_text
     assert "#SBATCH --job-name=structure_000000" in submit_text
     assert "mpirun /opt/vasp/vasp_std" in submit_text
+
+
+def test_labeling_setup_normalizes_interleaved_vasp_source(tmp_path, capsys):
+    """SCF setup should not copy an interleaved VASP species block as-is."""
+    generated_dir = tmp_path / "generated"
+    source_dir = generated_dir / "Te2Pd"
+    source_dir.mkdir(parents=True)
+    source_path = source_dir / "perturb_000000.vasp"
+    source_text = """Te Pd Te Pd
+1.0
+10 0 0
+0 10 0
+0 0 10
+Te Pd Te Pd
+2 1 2 1
+Cartesian
+0 0 0
+1 0 0
+2 0 0
+3 0 0
+4 0 0
+5 0 0
+"""
+    source_path.write_text(source_text, encoding="utf-8")
+    (generated_dir / "manifest.jsonl").write_text(
+        json.dumps({"path": str(source_path)}) + "\n",
+        encoding="utf-8",
+    )
+    config_path = tmp_path / "pesmaker.yaml"
+    config_path.write_text(
+        f"""project: normalize_interleaved_poscar
+generation:
+  output_dir: {generated_dir.as_posix()}
+labeling:
+  output_dir: {(tmp_path / 'labeling').as_posix()}
+jobs:
+  cores_cpu: 36
+""",
+        encoding="utf-8",
+    )
+
+    assert main(["scf-setup", str(config_path)]) == 0
+    output = capsys.readouterr().out
+
+    poscar = tmp_path / "labeling" / "Te2Pd" / "perturb_000000" / "POSCAR"
+    lines = poscar.read_text(encoding="utf-8").splitlines()
+    assert lines[5].split() == ["Te", "Pd"]
+    assert lines[6].split() == ["4", "2"]
+    assert "Warnings:" in output
+    assert "Normalized non-compact VASP species block" in output
+    assert "Inspect POSCAR before submission" in output
+    assert (
+        tmp_path
+        / "labeling"
+        / "Te2Pd"
+        / "perturb_000000"
+        / "perturb_000000.vasp-bak"
+    ).read_text(encoding="utf-8") == source_text
 
 
 def test_labeling_setup_normalizes_literal_submit_template(tmp_path):

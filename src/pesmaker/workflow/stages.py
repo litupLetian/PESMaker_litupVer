@@ -22,7 +22,7 @@ import json
 import shlex
 import shutil
 import subprocess
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from glob import glob
 from pathlib import Path
 from typing import Any
@@ -263,6 +263,7 @@ class StageResult:
     output_dir: Path
     files: tuple[Path, ...]
     message: str
+    warnings: tuple[str, ...] = field(default_factory=tuple)
 
 
 @dataclass(frozen=True)
@@ -400,6 +401,7 @@ def setup_labeling(config: PESMakerConfig) -> StageResult:
         default=DEFAULT_INCAR,
     )
     files: list[Path] = []
+    warnings: list[str] = []
     manifest_path = output_dir / "labeling_manifest.jsonl"
     source_root = _labeling_source_root(config, config.labeling.options)
     used_workdirs: set[Path] = set()
@@ -416,7 +418,9 @@ def setup_labeling(config: PESMakerConfig) -> StageResult:
             )
             calc_dir.mkdir(parents=True, exist_ok=True)
             poscar_path = calc_dir / "POSCAR"
-            _write_labeling_poscar(source_path, poscar_path)
+            warning = _write_labeling_poscar(source_path, poscar_path)
+            if warning:
+                warnings.append(warning)
             resources = _job_resources(
                 config,
                 atom_count=_labeling_atom_count(record, poscar_path),
@@ -478,6 +482,7 @@ def setup_labeling(config: PESMakerConfig) -> StageResult:
         output_dir,
         tuple(files),
         f"Prepared {len(records)} SCF job(s)",
+        warnings=tuple(warnings),
     )
 
 
@@ -752,12 +757,38 @@ def _safe_path_part(value: str) -> str:
     return safe.strip("_") or "structure"
 
 
-def _write_labeling_poscar(source_path: Path, poscar_path: Path) -> None:
-    if source_path.suffix.lower() in {".vasp", ".poscar"}:
-        shutil.copy2(source_path, poscar_path)
-        return
+def _write_labeling_poscar(source_path: Path, poscar_path: Path) -> str | None:
+    needs_normalization = _vasp_species_block_has_repeated_symbols(source_path)
     atoms = load_structure(source_path)
     write_structure(atoms, poscar_path, fmt="vasp")
+    if needs_normalization:
+        return (
+            "Normalized non-compact VASP species block: "
+            f"{source_path} -> {poscar_path}. Inspect POSCAR before submission."
+        )
+    return None
+
+
+def _vasp_species_block_has_repeated_symbols(path: Path) -> bool:
+    if path.suffix.lower() not in {".vasp", ".poscar"}:
+        return False
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except UnicodeDecodeError:
+        lines = path.read_text().splitlines()
+    if len(lines) < 7:
+        return False
+    symbols = lines[5].split()
+    counts = lines[6].split()
+    if not symbols or not counts or len(symbols) != len(counts):
+        return False
+    if not all(_looks_like_element_symbol(symbol) for symbol in symbols):
+        return False
+    return len(set(symbols)) != len(symbols)
+
+
+def _looks_like_element_symbol(value: str) -> bool:
+    return len(value) <= 2 and value[0].isalpha() and value[0].isupper()
 
 
 def _copy_labeling_source_backup(

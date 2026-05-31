@@ -62,4 +62,34 @@ def write_structure(atoms, path: str | Path, *, fmt: str | None = None) -> None:
 
     output_path = Path(path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    write(output_path, atoms, format=fmt)
+    write(output_path, _prepare_atoms_for_write(atoms, output_path, fmt), format=fmt)
+
+
+def _prepare_atoms_for_write(atoms, path: Path, fmt: str | None):
+    """Return an output-ready Atoms object for format-specific conventions."""
+    if _is_vasp_output(path, fmt):
+        return _group_atoms_by_first_symbol(atoms)
+    return atoms
+
+
+def _is_vasp_output(path: Path, fmt: str | None) -> bool:
+    if fmt is not None:
+        return fmt.lower() in {"vasp", "poscar"}
+    return path.suffix.lower() in {".vasp", ".poscar"}
+
+
+def _group_atoms_by_first_symbol(atoms):
+    """Group atoms by first-seen element order for compact VASP POSCAR output."""
+    symbols = atoms.get_chemical_symbols()
+    groups: dict[str, list[int]] = {}
+    order: list[str] = []
+    for index, symbol in enumerate(symbols):
+        if symbol not in groups:
+            groups[symbol] = []
+            order.append(symbol)
+        groups[symbol].append(index)
+
+    indices = [index for symbol in order for index in groups[symbol]]
+    if indices == list(range(len(symbols))):
+        return atoms
+    return atoms[indices]

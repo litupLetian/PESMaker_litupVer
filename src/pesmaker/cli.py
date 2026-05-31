@@ -354,6 +354,14 @@ def _print_labeling_result(result: StageResult, config_path: Path) -> None:
     print(f"Output directory : {result.output_dir}")
     print(f"Manifest         : {manifest_path}")
     print()
+    if result.warnings:
+        print("Warnings:")
+        for warning in result.warnings[:5]:
+            print(f"  - {warning}")
+        omitted = len(result.warnings) - 5
+        if omitted > 0:
+            print(f"  - ... {omitted} more warning(s)")
+        print()
     print("Next steps:")
     print(
         f"  - Inspect one job folder under {result.output_dir} "

@@ -1,35 +1,52 @@
 # PESMaker
 
-PESMaker is a lightweight Python workflow package for generating
+PESMaker is a lightweight Python workflow package for building
 application-oriented datasets and machine-learned interatomic potentials from
 user-provided atomistic structures.
 
-The current development focus is the first structure-generation layer:
-
-1. read initial structures with ASE;
-2. build supercells;
-3. create perturbed structures using cell and atomic displacements;
-4. write generated structures and a manifest for later DFT labeling.
-
-## Current command flow
-
-```bash
-pesmaker validate examples/perturb.yaml
-pesmaker generate examples/perturb.yaml
-```
-
-## Project direction
-
-The intended full workflow is:
+It supports a staged workflow:
 
 ```text
 initial structures
-  -> structure generation and targeted sampling
-  -> DFT SCF labeling
-  -> dataset assembly
-  -> NEP or MACE training
-  -> deployable potential
+  -> supercells, surfaces, defects, perturbations
+  -> optional GPUMD sampling and frame selection
+  -> VASP SCF labeling setup and submission
+  -> extxyz dataset collection
+  -> NEP training setup
 ```
 
-PESMaker is designed to be user-structure-driven, foundation-potential-assisted,
-and friendly to GPUMD/NEP and MACE workflows.
+## Start Here
+
+For the complete workflow, read the
+[Active Learning Workflow](ACTIVE_LEARNING_WORKFLOW.md) manual.
+
+For a short command overview, see [Usage](usage.md).
+
+## Main Command Flow
+
+Direct generation and SCF labeling:
+
+```bash
+pesmaker validate run.yaml
+pesmaker generate run.yaml
+pesmaker scf-setup run.yaml
+pesmaker submit run.yaml             # submit SCF/VASP jobs
+pesmaker collect run.yaml
+```
+
+Full sampling, labeling, and training loop:
+
+```bash
+pesmaker generate run.yaml
+pesmaker sample-setup run.yaml
+pesmaker submit run.yaml --stage sampling   # submit MD sampling jobs
+pesmaker select run.yaml
+pesmaker scf-setup run.yaml
+pesmaker submit run.yaml                    # submit SCF/VASP jobs
+pesmaker collect run.yaml
+pesmaker train-setup run.yaml
+pesmaker submit run.yaml --stage training   # submit NEP training jobs
+```
+
+PESMaker is designed to keep every stage inspectable through ordinary folders,
+manifests, and scheduler scripts.

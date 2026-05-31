@@ -1,81 +1,152 @@
 # Usage
 
-## Generate perturbed structures
+This page gives the short command-level workflow. For detailed configuration
+and stage behavior, use the
+[Active Learning Workflow](ACTIVE_LEARNING_WORKFLOW.md) manual.
 
-Create a YAML input file:
-
-```yaml
-project: Te_mp_19_test
-
-structures:
-  - path/to/input.cif
-
-generation:
-  supercell: [4, 4, 4]
-  output_dir: runs/Te_mp_19_test/generated
-  perturb:
-    pert_num: 49
-    cell_pert_fraction: 0.03
-    atom_pert_distance: 0.1
-    atom_pert_style: normal
-    seed: 42
-    format: vasp
-```
-
-Validate the input:
+## Install and Check
 
 ```bash
-pesmaker validate examples/perturb.yaml
+python -m pip install -e .
+pesmaker --help
 ```
 
-Generate the structures:
+Create a starter YAML file:
 
 ```bash
-pesmaker generate examples/perturb.yaml
+pesmaker init run.yaml
 ```
 
-The output directory contains generated VASP structure files and a manifest:
+Validate before running expensive stages:
 
-```text
-runs/Te_mp_19_test/generated/
-  input/
-    perturb_000000.vasp
-    perturb_000001.vasp
-    ...
-  manifest.jsonl
+```bash
+pesmaker validate run.yaml
 ```
 
-For multiple CIF files, list them directly:
+## Direct Generate to SCF Workflow
+
+Use this path when generated structures should go directly to DFT labeling:
+
+```bash
+pesmaker generate run.yaml
+pesmaker scf-setup run.yaml
+pesmaker submit run.yaml --dry-run   # preview SCF/VASP submissions
+pesmaker submit run.yaml             # submit SCF/VASP jobs
+pesmaker collect run.yaml
+```
+
+Minimal structure-generation and SCF setup example:
 
 ```yaml
-project: Te_batch
+project: Te_surface_scf
 
-structures:
-  - Te-mp-19.cif
-  - Te-mp-23.cif
-  - Te-mp-1009490.cif
-
-generation:
-  supercell: [4, 4, 4]
-  perturb:
-    pert_num: 20
-```
-
-For many CIF files in a directory, use an include pattern:
-
-```yaml
 structures:
   include:
     - initial_structures/*.cif
+
+generation:
+  output_dir: generated
+  tasks:
+    - name: surface_331
+      supercell: [3, 3, 1]
+      surface:
+        vacuum: 30.0
+        axis: 2
+        center: true
+        defects:
+          mode: random
+          seed: 42
+          single_vacancies:
+            elements: [Te]
+            max_count: 4
+        perturb:
+          pert_num: 10
+          format: vasp
+
+labeling:
+  engine: vasp
+  output_dir: labeling
+  input_dir: generated
+  incar: templates/vasp/INCAR
+  potcar_library: /path/to/VASP/potentials
+  command: /path/to/vasp_std
+
+jobs:
+  submit_command: sbatch
+  cores_cpu: 36
+  sub_file: templates/sbatch/vasp_cpu_36.sh
 ```
 
-## Perturbation parameters
+## Full Sampling and Training Workflow
 
-- `supercell`: expansion factors along the three lattice directions.
-- `pert_num`: number of perturbed structures to generate.
-- `cell_pert_fraction`: cell perturbation amplitude.
-- `atom_pert_distance`: atomic displacement scale in Angstrom.
-- `atom_pert_style`: atomic displacement distribution. Current options are
-  `normal`, `uniform`, and `const`.
-- `seed`: optional random seed for reproducibility.
-- `format`: output format. Current options are `vasp` and `extxyz`.
+Use this path when generated structures first seed MD sampling:
+
+```bash
+pesmaker generate run.yaml
+pesmaker sample-setup run.yaml
+pesmaker submit run.yaml --stage sampling   # submit MD sampling jobs
+pesmaker select run.yaml
+pesmaker scf-setup run.yaml
+pesmaker submit run.yaml                    # submit SCF/VASP jobs
+pesmaker collect run.yaml
+pesmaker train-setup run.yaml
+pesmaker submit run.yaml --stage training   # submit NEP training jobs
+```
+
+The three `submit` commands are different. `--stage sampling` submits MD jobs
+prepared by `sample-setup`; the default `submit` submits SCF/VASP jobs prepared
+by `scf-setup`; `--stage training` submits training jobs prepared by
+`train-setup`.
+
+Add these sections to the config:
+
+```yaml
+sampling:
+  engine: gpumd
+  output_dir: sampling
+  gpumd_dir: /path/to/GPUMD/src
+  potential: nep89_20250409.txt
+  temperatures: [300, 600, 900]
+  run_in: templates/gpumd/run.in
+  selection:
+    trajectory_pattern: sampling/**/movie.xyz
+    output_dir: selected
+    min_distance: 0.2
+    max_count: 200
+
+labeling:
+  engine: vasp
+  output_dir: labeling
+  input_manifest: selected/manifest.jsonl
+  incar: templates/vasp/INCAR
+  potcar_library: /path/to/VASP/potentials
+  command: /path/to/vasp_std
+
+training:
+  model: nep
+  output_dir: training
+  dataset: train.xyz
+  command: nep
+
+jobs:
+  submit_command: sbatch
+  cores_cpu: 36
+  sub_file:
+    sampling: templates/sbatch/gpumd.sh
+    labeling: templates/sbatch/vasp_cpu_36.sh
+    training: templates/sbatch/nep.sh
+```
+
+## Common Outputs
+
+```text
+generated/   # generated structures and manifest
+sampling/    # GPUMD job folders
+selected/    # selected MD frames
+labeling/    # VASP SCF job folders
+train.xyz    # collected labeled dataset
+training/    # NEP training setup
+```
+
+Use `pesmaker submit run.yaml --dry-run` whenever you change machine templates
+or resource settings.

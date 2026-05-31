@@ -17,6 +17,7 @@
 
 import numpy as np
 
+from pesmaker.structures.io import write_structure
 from pesmaker.structures.perturb import (
     PerturbationSettings,
     get_atom_perturb_vector,
@@ -39,6 +40,32 @@ def test_make_supercell_multiplies_atom_count():
     supercell = make_supercell(atoms, (4, 4, 4))
 
     assert len(supercell) == 64
+
+
+def test_vasp_writer_groups_repeated_element_blocks(tmp_path):
+    """VASP output should use one compact count block per element."""
+    from ase import Atoms
+
+    atoms = Atoms(
+        ["Te", "Te", "Pd", "Te", "Te", "Pd"],
+        positions=[
+            (0.0, 0.0, 0.0),
+            (1.0, 0.0, 0.0),
+            (2.0, 0.0, 0.0),
+            (3.0, 0.0, 0.0),
+            (4.0, 0.0, 0.0),
+            (5.0, 0.0, 0.0),
+        ],
+        cell=[10.0, 10.0, 10.0],
+        pbc=True,
+    )
+    path = tmp_path / "tepd.vasp"
+
+    write_structure(atoms, path, fmt="vasp")
+
+    lines = path.read_text(encoding="utf-8").splitlines()
+    assert lines[5].split() == ["Te", "Pd"]
+    assert lines[6].split() == ["4", "2"]
 
 
 def test_cell_perturb_matrix_matches_dpdata_shape_and_bounds():

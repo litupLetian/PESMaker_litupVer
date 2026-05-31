@@ -1,197 +1,192 @@
 # PESMaker
 
-PESMaker is a planned lightweight workflow package for building application-oriented
-datasets and machine-learned interatomic potentials from user-provided atomistic
+PESMaker, short for **Potential Energy Surface Maker**, is a lightweight
+workflow package for building application-oriented datasets for
+machine-learned interatomic potentials from user-provided atomistic
 structures.
 
-The working full name is **Potential Energy Surface Maker**.
+It is designed for practical materials workflows where you already have
+meaningful structures, such as bulk phases, surfaces, defects, interfaces, or
+reaction candidates, and need to turn them into reproducible DFT labeling jobs
+and training inputs.
 
-## License
+## Why PESMaker
 
-PESMaker is free software distributed under the **GNU General Public License**,
-version 3 of the License, or (at your option) any later version.
+PESMaker helps you move from structures to MLIP training data without turning
+the workflow into one large hidden script:
 
-See [LICENSE](LICENSE) and [NOTICE](NOTICE) for details.
+- generate supercells, surface slabs, vacancies, line defects, and perturbed
+  structures from CIF, POSCAR, XYZ, and other ASE-readable inputs;
+- keep every generated structure traceable through `manifest.jsonl` and
+  human-readable summaries;
+- prepare VASP SCF folders with `POSCAR`, `INCAR`, optional `POTCAR`, and
+  `submit.sh`;
+- submit prepared jobs through machine-specific Slurm templates;
+- collect completed SCF outputs into an extxyz training set;
+- prepare NEP training folders while keeping sampling, labeling, collection,
+  and training as separate inspectable stages.
 
-## Scope
+PESMaker is user-structure-driven rather than random-search-first. The intended
+use case is targeted dataset construction for batteries, solid electrolytes,
+thermal transport, alloys, 2D materials, defects, surfaces, catalysis, and
+reactions.
 
-PESMaker focuses on this path:
+## Workflow
 
-```text
-initial structures
-  -> structure generation and targeted sampling
-  -> candidate filtering
-  -> DFT SCF labeling
-  -> dataset assembly
-  -> NEP or MACE training
-  -> model report and deployable potential
+Direct generation and DFT labeling:
+
+```bash
+pesmaker validate run.yaml
+pesmaker generate run.yaml
+pesmaker scf-setup run.yaml
+pesmaker submit run.yaml --dry-run   # preview SCF/VASP submissions
+pesmaker submit run.yaml             # submit SCF/VASP jobs
+pesmaker collect run.yaml
 ```
 
-The first implementation target is VASP SCF labeling, followed by
-GPUMD/NEP and MACE training workflows.
+Full sampling, labeling, and training loop:
 
-## Differentiation
+```bash
+pesmaker generate run.yaml
+pesmaker sample-setup run.yaml
+pesmaker submit run.yaml --stage sampling   # submit MD sampling jobs
+pesmaker select run.yaml
+pesmaker scf-setup run.yaml
+pesmaker submit run.yaml                    # submit SCF/VASP jobs
+pesmaker collect run.yaml
+pesmaker train-setup run.yaml
+pesmaker submit run.yaml --stage training   # submit NEP training jobs
+```
 
-PESMaker is designed to be:
-
-- user-structure-driven rather than random-structure-search first;
-- foundation-potential-assisted for affordable sampling before DFT labeling;
-- NEP/GPUMD and MACE friendly from the beginning;
-- lightweight enough to run without a mandatory database service;
-- application-oriented for batteries, solid electrolytes, thermal transport,
-  alloys, defects, surfaces, catalysis, and reactions.
-
-## Current skeleton
+`submit` always submits `submit.sh` files that were prepared by an earlier
+setup command. Without `--stage`, it submits the SCF labeling stage by default.
+Use `--stage sampling` for MD jobs and `--stage training` for training jobs.
+Each stage writes normal files and folders that can be inspected, edited, and
+rerun independently.
 
 ```text
-src/pesmaker/
-  config/        # YAML input parsing and validation
-  structures/    # POSCAR/CIF/XYZ IO, supercells, perturbations
-  samplers/      # LAMMPS+MACE, GPUMD+NEP sampling interfaces
-  generators/    # defects, vacancies, surfaces, transition states
-  labelers/      # VASP first, CP2K later
-  jobs/          # Slurm/PBS/local submission and monitoring
-  parsers/       # VASP, GPUMD, MACE output parsing
-  dataset/       # extxyz, NEP train.xyz, HDF5, metadata
-  trainers/      # NEP and MACE training interfaces
-  workflow/      # stage setup and workflow execution helpers
-  cli.py         # command line interface
+generated/   # supercells, surfaces, defects, perturbations
+sampling/    # GPUMD MD job folders and submit scripts
+selected/    # representative frames selected from trajectories
+labeling/    # VASP SCF calculation folders
+train.xyz    # collected labeled dataset
+training/    # NEP training input folder and submit script
+```
+
+## Example Config
+
+```yaml
+project: Te_Pd_rich_defect_md
+
+structures:
+  include:
+    - initial_structures/*.cif
+
+generation:
+  output_dir: generated
+  tasks:
+    - name: surface_331
+      supercell: [3, 3, 1]
+      surface:
+        vacuum: 30.0
+        axis: 2
+        center: true
+        defects:
+          mode: random
+          seed: 42
+          single_vacancies:
+            elements: [Te]
+            max_count: 8
+          double_vacancies:
+            elements: [Te]
+            max_count: 8
+          line_defects:
+            elements: [Te]
+            max_count: 4
+        perturb:
+          pert_num: 20
+          cell_pert_fraction: 0.03
+          atom_pert_distance: 0.1
+          atom_pert_style: normal
+          seed: 42
+          format: vasp
+    - name: bulk_333
+      supercell: [3, 3, 3]
+      perturb:
+        pert_num: 20
+        cell_pert_fraction: 0.03
+        atom_pert_distance: 0.1
+        atom_pert_style: normal
+        seed: 42
+        format: vasp
+
+labeling:
+  engine: vasp
+  output_dir: labeling
+  input_dir: generated
+  incar: templates/vasp/INCAR
+  potcar_library: /path/to/VASP/potentials
+  command: /path/to/vasp_std
+
+jobs:
+  submit_command: sbatch
+  cores_cpu: 36
+  gpus: 0
+  sub_file: templates/sbatch/vasp_cpu_36.sh
 ```
 
 ## Installation
 
-Clone the repository:
-
 ```bash
 git clone https://github.com/Tingliangstu/PESMaker.git
 cd PESMaker
-```
-
-Install PESMaker in editable mode:
-
-```bash
 python -m pip install -e .
 ```
 
-For development, install the test and lint tools too:
+For development and documentation:
 
 ```bash
-python -m pip install -e ".[dev]"
+python -m pip install -e ".[dev,docs]"
 ```
 
-After installation, the command-line interface should be available as:
+Check the command-line interface:
 
 ```bash
 pesmaker --help
 ```
 
-On Windows, `pip` may install `pesmaker.exe` into a user script directory that
-is not on `PATH`, for example:
-
-```text
-C:\Users\<user>\AppData\Roaming\Python\Python313\Scripts
-```
-
-If `pesmaker --help` is not recognized, either add that directory to your user
-`PATH`, or run the executable by its full path:
+On Windows, if `pesmaker` is not on `PATH`, run it through Python:
 
 ```powershell
-& 'C:\Users\<user>\AppData\Roaming\Python\Python313\Scripts\pesmaker.exe' --help
+python -m pesmaker --help
 ```
 
-Current runtime dependencies are PyYAML, NumPy, and ASE. Pymatgen is optional
-for later atomistic utilities.
-
-Minimum runtime dependencies:
-
-```text
-python >= 3.10
-ase >= 3.23
-numpy >= 1.24
-PyYAML >= 6.0
-```
-
-Editable installation also needs the build tools listed in `pyproject.toml`:
-
-```text
-setuptools >= 68
-wheel
-```
-
-PESMaker uses YAML configuration files only. This keeps the command-line
-workflow simple and avoids optional config parser dependencies.
+Minimum runtime dependencies are Python 3.10+, ASE, NumPy, and PyYAML.
 
 ## Documentation
 
-The documentation is built with MkDocs and is intended to be published with
-GitHub Pages:
+The full manual is in [`docs/ACTIVE_LEARNING_WORKFLOW.md`](docs/ACTIVE_LEARNING_WORKFLOW.md).
+The MkDocs site can be served locally with:
 
 ```bash
-python -m pip install -e ".[docs]"
 mkdocs serve
 ```
 
-After GitHub Pages is enabled, the online manual will be available at:
+The intended GitHub Pages URL is:
 
 ```text
 https://Tingliangstu.github.io/PESMaker/
 ```
 
-## Try the Scaffold
+## Current Scope
 
-```bash
-python -m pesmaker validate examples/pesmaker.yaml
-python -m pesmaker generate examples/pesmaker.yaml
-```
+Current implemented stages cover structure generation, GPUMD sampling setup,
+trajectory-frame selection, VASP SCF setup, scheduler submission, extxyz dataset
+collection, and NEP training setup. Future backends such as LAMMPS-MACE can use
+the same stage boundaries.
 
-## Generate perturbed structures
+## License
 
-PESMaker can generate supercells and perturbed structures from CIF, POSCAR, and
-other ASE-readable structure files:
-
-```bash
-pesmaker generate examples/perturb.yaml
-```
-
-The first perturbation backend follows the common `dpdata.System.perturb` style
-parameters:
-
-```yaml
-generation:
-  supercell: [4, 4, 4]
-  perturb:
-    pert_num: 49
-    cell_pert_fraction: 0.03
-    atom_pert_distance: 0.1
-    atom_pert_style: normal
-    seed: 42
-    format: vasp
-```
-
-For multiple structures, list each file directly:
-
-```yaml
-project: Te_batch
-
-structures:
-  - Te-mp-19.cif
-  - Te-mp-23.cif
-  - Te-mp-1009490.cif
-
-generation:
-  supercell: [4, 4, 4]
-  perturb:
-    pert_num: 20
-```
-
-Each input file gets its own output folder under
-`runs/<project>/generated/<input-file-name>/`.
-
-For many structures in one directory, use `include`:
-
-```yaml
-structures:
-  include:
-    - initial_structures/*.cif
-```
-
+PESMaker is free software distributed under the GNU General Public License,
+version 3 of the License, or (at your option) any later version. See
+[`LICENSE`](LICENSE) and [`NOTICE`](NOTICE) for details.
