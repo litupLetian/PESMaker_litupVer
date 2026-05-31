@@ -90,7 +90,9 @@ For CPU VASP jobs, `KPAR` defaults to `2` when `jobs.cores_cpu` is even, and
 PESMaker chooses `NCORE` inside each KPAR group; for example, `cores_cpu: 36`
 generates `KPAR = 2` and `NCORE = 3`. PESMaker writes `NCORE`, not legacy
 `NPAR`. Override them with `jobs.vasp_kpar` and `jobs.vasp_ncore` when needed.
-For GPU jobs, set `gpus: <count>` under `jobs`.
+The default CPU VASP submit script uses `mpirun {command}` and assumes it is
+submitted from the calculation directory. `pesmaker submit` does this
+automatically. For GPU jobs, set `gpus: <count>` under `jobs`.
 
 ## `pesmaker submit`
 

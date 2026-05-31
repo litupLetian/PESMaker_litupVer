@@ -320,15 +320,15 @@ jobs:
     assert "#!/bin/bash -l" in submit_text
     assert "#SBATCH --output=out.%j" in submit_text
     assert "#SBATCH --error=err.%j" in submit_text
-    assert "#SBATCH --ntasks-per-node=36" in submit_text
+    assert "#SBATCH --ntasks=36" in submit_text
     assert "#SBATCH --cpus-per-task=1" in submit_text
     assert "#SBATCH --gres" not in submit_text
     assert "#SBATCH --time" not in submit_text
     assert "set -euo pipefail" in submit_text
-    assert f'cd "{workdir}"' in submit_text
+    assert "cd " not in submit_text
     assert "export OMP_NUM_THREADS=${OMP_NUM_THREADS:-1}" in submit_text
     assert "ulimit -s unlimited" in submit_text
-    assert "/opt/vasp/vasp_std" in submit_text
+    assert "mpirun /opt/vasp/vasp_std" in submit_text
 
 
 def test_labeling_setup_uses_manual_vasp_parallel_options(tmp_path):
@@ -468,7 +468,7 @@ jobs:
     submit_text = (workdir / "submit.sh").read_text(encoding="utf-8")
     assert "KPAR =" not in incar_text
     assert "NCORE =" not in incar_text
-    assert "#SBATCH --ntasks-per-node=8" in submit_text
+    assert "#SBATCH --ntasks=8" in submit_text
     assert "#SBATCH --gres=gpu:2" in submit_text
 
 

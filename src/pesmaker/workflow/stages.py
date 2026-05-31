@@ -1085,11 +1085,13 @@ def _write_submit_script(
     job_name = workdir.name
     resources = resources or _job_resources(config)
     if template_path:
+        ntasks = resources.nodes * resources.cores_cpu
         text = template_path.read_text(encoding="utf-8").format(
             command=command,
             job_name=job_name,
             workdir=workdir,
             nodes=resources.nodes,
+            ntasks=ntasks,
             cores_cpu=resources.cores_cpu,
             ntasks_per_node=resources.cores_cpu,
             gpus=resources.gpus,
@@ -1100,7 +1102,8 @@ def _write_submit_script(
         text = _default_submit_script(
             command=command,
             job_name=job_name,
-            workdir=workdir,
+            stage=stage,
+            engine=_stage_engine(config, stage),
             resources=resources,
         )
     path = workdir / "submit.sh"
@@ -1132,6 +1135,16 @@ def _stage_template_value(templates: dict[str, Any], stage: str) -> Any:
     if stage == "labeling" and templates.get("scf"):
         return templates["scf"]
     return None
+
+
+def _stage_engine(config: PESMakerConfig, stage: str) -> str:
+    if stage == "sampling":
+        return config.sampling.engine
+    if stage == "labeling":
+        return config.labeling.engine
+    if stage == "training":
+        return config.training.engine
+    return stage
 
 
 def _job_resources(
@@ -1270,16 +1283,18 @@ def _default_submit_script(
     *,
     command: str,
     job_name: str,
-    workdir: Path,
+    stage: str,
+    engine: str,
     resources: JobResources,
 ) -> str:
+    ntasks = resources.nodes * resources.cores_cpu
     lines = [
         "#!/bin/bash -l",
         f"#SBATCH --job-name={job_name}",
         "#SBATCH --output=out.%j",
         "#SBATCH --error=err.%j",
         f"#SBATCH --nodes={resources.nodes}",
-        f"#SBATCH --ntasks-per-node={resources.cores_cpu}",
+        f"#SBATCH --ntasks={ntasks}",
         "#SBATCH --cpus-per-task=1",
     ]
     if resources.gpus:
@@ -1288,8 +1303,6 @@ def _default_submit_script(
         [
             "",
             "set -euo pipefail",
-            "",
-            f'cd "{workdir}"',
             "",
             "export OMP_NUM_THREADS=${OMP_NUM_THREADS:-1}",
             "ulimit -s unlimited",
@@ -1301,13 +1314,25 @@ def _default_submit_script(
             'echo "Working directory: $(pwd)"',
             'echo "--------------------------------"',
             "",
-            command,
+            _default_run_command(command, stage=stage, engine=engine, resources=resources),
             "",
             'echo "Simulation finished at $(date)"',
             "",
         ]
     )
     return "\n".join(lines)
+
+
+def _default_run_command(
+    command: str,
+    *,
+    stage: str,
+    engine: str,
+    resources: JobResources,
+) -> str:
+    if stage == "labeling" and engine.lower() == "vasp" and not resources.gpus:
+        return f"mpirun {command}"
+    return command
 
 
 def _prepare_labeling_incar(text: str, resources: JobResources) -> str:
