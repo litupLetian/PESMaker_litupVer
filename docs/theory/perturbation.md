@@ -92,6 +92,7 @@ The default parameters mirror a common practical setting:
 
 ```yaml
 perturb:
+  include_pristine: true
   pert_num: 49
   cell_pert_fraction: 0.03
   atom_pert_distance: 0.1
@@ -100,3 +101,5 @@ perturb:
 
 These values generate moderately distorted structures around the starting
 geometry and are useful for preparing initial DFT single-point candidates.
+`include_pristine: true` also writes the expanded, unperturbed base structure as
+`unperturbed.<format>` in the generated output.

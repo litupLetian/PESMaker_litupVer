@@ -124,13 +124,13 @@ def _single_vacancies(atoms, settings: Any) -> list[StructureVariant]:
         indices = _sample_items(indices, options)
     else:
         indices = indices[: options["max_count"]]
-    for index in indices:
+    for serial, index in enumerate(indices, start=1):
         variant = atoms.copy()
         symbol = variant[index].symbol
         del variant[index]
         variants.append(
             StructureVariant(
-                f"single_vacancy_{symbol}_{index:06d}",
+                f"single_vacancy_{_element_label([symbol])}_{serial:06d}",
                 variant,
                 f"single vacancy: remove {symbol} atom {index}",
             )
@@ -157,14 +157,14 @@ def _double_vacancies(atoms, settings: Any) -> list[StructureVariant]:
         raise ValueError(f"unsupported double_vacancies selection: {selection}")
 
     variants: list[StructureVariant] = []
-    for first, second in pairs:
+    for serial, (first, second) in enumerate(pairs, start=1):
         variant = atoms.copy()
         symbols = (variant[first].symbol, variant[second].symbol)
         for index in sorted((first, second), reverse=True):
             del variant[index]
         variants.append(
             StructureVariant(
-                f"double_vacancy_{symbols[0]}{first:06d}_{symbols[1]}{second:06d}",
+                f"double_vacancy_{_element_label(symbols)}_{serial:06d}",
                 variant,
                 f"double vacancy: remove atoms {first} and {second}",
             )
@@ -194,15 +194,21 @@ def _line_defects(atoms, settings: Any) -> list[StructureVariant]:
         selected_rows = _sample_items(ordered_rows, options)
     else:
         selected_rows = ordered_rows[: options["max_count"]]
-    for line_index, row in enumerate(selected_rows):
+    axis_label = _coordinate_axis_label(coordinate_axis)
+    for serial, row in enumerate(selected_rows, start=1):
         variant = atoms.copy()
+        symbols = [variant[index].symbol for index in row]
         for index in sorted(row, reverse=True):
             del variant[index]
         variants.append(
             StructureVariant(
-                f"line_defect_axis{coordinate_axis}_{line_index:03d}",
+                f"line_defect_{_element_label(symbols)}_{axis_label}_{serial:06d}",
                 variant,
-                f"line defect: remove {len(row)} atom(s) along row {line_index}",
+                (
+                    f"line defect: fixed fractional "
+                    f"{axis_label.removeprefix('const_')} coordinate, "
+                    f"remove atoms {sorted(row)}"
+                ),
             )
         )
     return variants
@@ -305,6 +311,18 @@ def _normalize_defect_options(settings: Any, *, default_max: int) -> dict[str, A
 
 def _selection_mode(options: dict[str, Any], *, default: str = "ordered") -> str:
     return str(options.get("selection", default)).lower()
+
+
+def _element_label(symbols: list[str] | tuple[str, ...]) -> str:
+    unique = []
+    for symbol in symbols:
+        if symbol not in unique:
+            unique.append(symbol)
+    return "-".join(unique) if unique else "all"
+
+
+def _coordinate_axis_label(axis: int) -> str:
+    return ("const_a", "const_b", "const_c")[axis]
 
 
 def _sample_items(items: list[Any], options: dict[str, Any]) -> list[Any]:

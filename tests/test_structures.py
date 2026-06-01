@@ -143,9 +143,9 @@ def test_surface_and_defect_variants_are_generated():
     assert slab.cell.lengths()[2] >= 30.0
     assert [variant.name for variant in variants] == [
         "pristine",
-        "single_vacancy_Te_000000",
-        "double_vacancy_Te000000_Te000001",
-        "line_defect_axis0_000",
+        "single_vacancy_Te_000001",
+        "double_vacancy_Te_000001",
+        "line_defect_Te_const_a_000001",
     ]
     assert [len(variant.atoms) for variant in variants] == [4, 3, 2, 2]
 
@@ -180,12 +180,27 @@ def test_random_vacancies_are_seeded_and_reproducible():
     different_seed = generate_defect_variants(atoms, {**settings, "seed": 7})
 
     assert [variant.name for variant in first] == [variant.name for variant in second]
-    assert [variant.name for variant in first] != [
-        variant.name for variant in different_seed
+    assert [variant.description for variant in first] == [
+        variant.description for variant in second
+    ]
+    assert [variant.description for variant in first] != [
+        variant.description for variant in different_seed
     ]
     assert [variant.name for variant in first] == [
-        "single_vacancy_Te_000000",
-        "single_vacancy_Te_000004",
-        "double_vacancy_Te000000_Te000002",
-        "double_vacancy_Te000002_Te000005",
+        "single_vacancy_Te_000001",
+        "single_vacancy_Te_000002",
+        "double_vacancy_Te_000001",
+        "double_vacancy_Te_000002",
     ]
+
+
+def test_perturbation_settings_can_include_pristine_base():
+    """Perturbation settings can request an unperturbed generated structure."""
+    settings = PerturbationSettings.from_mapping(
+        {"pert_num": 3, "include_pristine": True}
+    )
+    alias_settings = PerturbationSettings.from_mapping({"include_unperturbed": True})
+
+    assert settings.include_pristine is True
+    assert settings.pert_num == 3
+    assert alias_settings.include_pristine is True

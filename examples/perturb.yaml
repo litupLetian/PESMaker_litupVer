@@ -9,6 +9,7 @@ generation:
   supercell: [4, 4, 4]
   output_dir: runs/Te_mp_19_test/generated
   perturb:
+    include_pristine: true
     pert_num: 49
     cell_pert_fraction: 0.03
     atom_pert_distance: 0.1

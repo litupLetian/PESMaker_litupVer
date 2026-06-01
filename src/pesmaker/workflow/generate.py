@@ -153,6 +153,22 @@ def _generate_task_structures(
             )
             variant_dir.mkdir(parents=True, exist_ok=True)
             generation_type = _generation_type(task, variant.name)
+            if settings.include_pristine:
+                output_path = variant_dir / f"unperturbed.{suffix}"
+                write_structure(variant.atoms, output_path, fmt=ase_format)
+                item = GeneratedStructure(
+                    source=structure.path,
+                    path=output_path,
+                    task=task.name,
+                    supercell=task.supercell,
+                    variant=variant.name,
+                    variant_description=variant.description,
+                    generation_type="unperturbed",
+                    index=0,
+                    atom_count=len(variant.atoms),
+                )
+                generated.append(item)
+                manifest.write(json.dumps(_manifest_record(item)) + "\n")
             for structure_index, perturbed in enumerate(
                 perturb_structures(variant.atoms, settings)
             ):
@@ -348,7 +364,7 @@ def format_generate_summary(
 
 def _generation_complete_title(result: GenerateResult) -> str:
     generation_types = {structure.generation_type for structure in result.structures}
-    if generation_types == {"perturb"}:
+    if generation_types <= {"perturb", "unperturbed"} and "perturb" in generation_types:
         return "Perturbation generation complete"
     if generation_types == {"surface"}:
         return "Surface generation complete"

@@ -8,6 +8,7 @@ structures:
 generation:
   supercell: [4, 4, 4]
   perturb:
+    include_pristine: true
     pert_num: 20
 
 sampling:

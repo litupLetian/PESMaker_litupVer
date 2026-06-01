@@ -36,6 +36,8 @@ class PerturbationSettings:
             values are `normal`, `uniform`, and `const`.
         atom_pert_prob: Fraction of atoms selected for atomic displacement.
         seed: Optional random seed for reproducible perturbations.
+        include_pristine: Whether to also write the unperturbed base structure
+            before random perturbations in generation workflows.
     """
 
     pert_num: int = 1
@@ -44,6 +46,7 @@ class PerturbationSettings:
     atom_pert_style: str = "normal"
     atom_pert_prob: float = 1.0
     seed: int | None = None
+    include_pristine: bool = False
 
     @classmethod
     def from_mapping(cls, data: dict | None) -> "PerturbationSettings":
@@ -63,6 +66,9 @@ class PerturbationSettings:
             atom_pert_style=str(data.get("atom_pert_style", "normal")),
             atom_pert_prob=float(data.get("atom_pert_prob", 1.0)),
             seed=int(data["seed"]) if data.get("seed") is not None else None,
+            include_pristine=bool(
+                data.get("include_pristine", data.get("include_unperturbed", False))
+            ),
         )
 
 
