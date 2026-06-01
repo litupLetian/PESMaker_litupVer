@@ -219,8 +219,10 @@ generation:
 Important perturbation fields:
 
 - `pert_num`: number of structures generated from each variant;
-- `include_pristine`: when `true`, also write `unperturbed.<format>` in the
-  `pristine/` output before random cell and atom perturbations;
+- `include_pristine`: when `true`, also write `unperturbed.<format>` for
+  every defect variant before random cell and atom perturbations. The
+  `pristine/` output always includes `unperturbed.<format>`, even when this
+  option is omitted;
 - `cell_pert_fraction`: random cell perturbation amplitude;
 - `atom_pert_distance`: atomic displacement scale in Angstrom;
 - `atom_pert_style`: `normal`, `uniform`, or `const`;
@@ -327,10 +329,13 @@ generated/
         unperturbed.vasp
         surface_000000.vasp
       single_vacancy_Te_000001/
+        unperturbed.vasp
         defect_000000.vasp
       double_vacancy_Te_000001/
+        unperturbed.vasp
         defect_000000.vasp
       line_defect_Te_const_b_000001/
+        unperturbed.vasp
         defect_000000.vasp
   bulk_333/
     Te-mp-19/
@@ -344,8 +349,8 @@ file to inspect by eye.
 
 The generate command summary groups counts by defect family so it is clear how
 many pristine, single-vacancy, double-vacancy, and line-defect structures were
-written. For example, `max_count: 5` and `pert_num: 3` with
-`include_pristine: true` gives this per input:
+written. For example, `max_count: 5`, `pert_num: 3`, and no
+`include_pristine` line gives this per input:
 
 ```text
 per input:
@@ -354,6 +359,10 @@ per input:
   double vacancies: 5 variant(s), 15 structure(s) (15 perturbed)
   line defects: 5 variant(s), 15 structure(s) (15 perturbed)
 ```
+
+With `include_pristine: true`, each defect variant also gets one
+`unperturbed.<format>` file, so each defect family above becomes
+`5 variant(s), 20 structure(s) (5 unperturbed, 15 perturbed)`.
 
 ## Stage 2: Prepare Sampling Jobs
 

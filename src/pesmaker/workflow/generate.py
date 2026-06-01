@@ -153,7 +153,7 @@ def _generate_task_structures(
             )
             variant_dir.mkdir(parents=True, exist_ok=True)
             generation_type = _generation_type(task, variant.name)
-            if settings.include_pristine and variant.name == "pristine":
+            if _should_write_unperturbed_variant(variant.name, settings):
                 output_path = variant_dir / f"unperturbed.{suffix}"
                 write_structure(variant.atoms, output_path, fmt=ase_format)
                 item = GeneratedStructure(
@@ -190,6 +190,13 @@ def _generate_task_structures(
                 generated.append(item)
                 manifest.write(json.dumps(_manifest_record(item)) + "\n")
     return generated
+
+
+def _should_write_unperturbed_variant(
+    variant: str,
+    settings: PerturbationSettings,
+) -> bool:
+    return variant == "pristine" or settings.include_pristine
 
 
 def _structure_output_dirs(
