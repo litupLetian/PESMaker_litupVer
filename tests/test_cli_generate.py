@@ -105,7 +105,8 @@ generation:
     assert f"Details          : {output_dir / 'generation_summary.txt'}" in output
     assert "Generation tasks:" in output
     assert "  - 1 input(s) -> 2 structure(s), supercell=(4, 4, 4)" in output
-    assert "    per input: 2 perturb structure(s)" in output
+    assert "    per input:" in output
+    assert "      pristine: 2 structure(s) (2 perturbed)" in output
     assert "    details:" not in output
     assert f"      - input: {cif_path}" not in output
     assert "        generated: 2 perturb structure(s)" not in output
@@ -236,6 +237,7 @@ generation:
         elements: [Te]
         max_count: 1
     perturb:
+      include_pristine: true
       pert_num: 1
       seed: 7
 """,
@@ -245,20 +247,28 @@ generation:
     exit_code = main(["generate", str(config_path)])
 
     assert exit_code == 0
+    assert (output_dir / "te2d" / "pristine" / "unperturbed.vasp").exists()
     assert (output_dir / "te2d" / "pristine" / "surface_000000.vasp").exists()
     assert (
         output_dir / "te2d" / "single_vacancy_Te_000001" / "defect_000000.vasp"
     ).exists()
-    assert len(list(output_dir.glob("te2d/*/*.vasp"))) == 4
+    assert not (
+        output_dir / "te2d" / "single_vacancy_Te_000001" / "unperturbed.vasp"
+    ).exists()
+    assert len(list(output_dir.glob("te2d/*/*.vasp"))) == 5
     summary = (output_dir / "generation_summary.txt").read_text(encoding="utf-8")
     assert "Structure generation complete." in summary
     assert f"Details          : {output_dir / 'generation_summary.txt'}" in summary
     assert "Generation tasks:" in summary
     assert "Input structures" not in summary
-    assert "per input: 1 surface, 3 defect structure(s)" in summary
+    assert "    per input:" in summary
+    assert "      pristine: 2 structure(s) (1 unperturbed, 1 perturbed)" in summary
+    assert "      single vacancies: 1 variant(s), 1 structure(s) (1 perturbed)" in summary
+    assert "      double vacancies: 1 variant(s), 1 structure(s) (1 perturbed)" in summary
+    assert "      line defects: 1 variant(s), 1 structure(s) (1 perturbed)" in summary
     assert "    details:" in summary
     assert f"      - input: {structure_path}" in summary
-    assert "        generated: 1 surface, 3 defect structure(s)" in summary
+    assert "        generated:" in summary
     assert "surface ->" in summary
     assert "defect:single_vacancy_Te_000001 ->" in summary
     assert "files ->" not in summary

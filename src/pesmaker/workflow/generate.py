@@ -153,7 +153,7 @@ def _generate_task_structures(
             )
             variant_dir.mkdir(parents=True, exist_ok=True)
             generation_type = _generation_type(task, variant.name)
-            if settings.include_pristine:
+            if settings.include_pristine and variant.name == "pristine":
                 output_path = variant_dir / f"unperturbed.{suffix}"
                 write_structure(variant.atoms, output_path, fmt=ase_format)
                 item = GeneratedStructure(
@@ -280,7 +280,8 @@ def format_generate_summary(
     task_counts: dict[str, int] = defaultdict(int)
     task_supercells: dict[str, tuple[int, int, int]] = {}
     source_counts: dict[tuple[str, Path], int] = defaultdict(int)
-    source_type_counts: dict[tuple[str, Path, str], int] = defaultdict(int)
+    source_family_type_counts: dict[tuple[str, Path, str, str], int] = defaultdict(int)
+    source_family_variants: dict[tuple[str, Path, str], set[str]] = defaultdict(set)
     variant_counts: dict[
         tuple[str, Path, str, str, Path, str],
         int,
@@ -289,9 +290,13 @@ def format_generate_summary(
         task_counts[structure.task] += 1
         task_supercells[structure.task] = structure.supercell
         source_counts[(structure.task, structure.source)] += 1
-        source_type_counts[
-            (structure.task, structure.source, structure.generation_type)
+        family = _variant_family(structure.variant)
+        source_family_type_counts[
+            (structure.task, structure.source, family, structure.generation_type)
         ] += 1
+        source_family_variants[
+            (structure.task, structure.source, family)
+        ].add(structure.variant)
         variant_counts[
             (
                 structure.task,
@@ -323,21 +328,26 @@ def format_generate_summary(
             f"  - {task_label}{len(task_sources)} input(s) -> "
             f"{task_count} structure(s), supercell={supercell}"
         )
-        lines.append(
-            f"    per input: "
-            f"{_task_per_input_summary(source_type_counts, task, task_sources)}"
+        _append_per_input_summary(
+            lines,
+            source_family_type_counts,
+            source_family_variants,
+            task,
+            task_sources,
         )
         if not include_details:
             continue
         lines.append("    details:")
         for source, _source_count in task_sources:
-            type_summary = _generation_type_summary(
-                source_type_counts,
+            family_summary = _source_family_summary(
+                source_family_type_counts,
+                source_family_variants,
                 task=task,
                 source=source,
             )
             lines.append(f"      - input: {source}")
-            lines.append(f"        generated: {type_summary} structure(s)")
+            lines.append("        generated:")
+            lines.extend(f"          {line}" for line in family_summary)
             lines.append("        outputs:")
             task_variants = [
                 (generation_type, variant, folder, count)
@@ -373,39 +383,108 @@ def _generation_complete_title(result: GenerateResult) -> str:
     return "Structure generation complete"
 
 
-def _task_per_input_summary(
-    counts: dict[tuple[str, Path, str], int],
+def _append_per_input_summary(
+    lines: list[str],
+    counts: dict[tuple[str, Path, str, str], int],
+    variants: dict[tuple[str, Path, str], set[str]],
     task: str,
     task_sources: list[tuple[Path, int]],
-) -> str:
+) -> None:
     summaries = [
-        _generation_type_summary(counts, task=task, source=source)
+        tuple(
+            _source_family_summary(
+                counts,
+                variants,
+                task=task,
+                source=source,
+            )
+        )
         for source, _source_count in task_sources
     ]
     if not summaries:
-        return "0 structure(s)"
-    if len(set(summaries)) == 1:
-        return f"{summaries[0]} structure(s)"
-    return "varies by input"
+        lines.append("    per input: 0 structure(s)")
+        return
+    if len(set(summaries)) != 1:
+        lines.append("    per input: varies by input")
+        return
+    lines.append("    per input:")
+    lines.extend(f"      {line}" for line in summaries[0])
 
 
-def _generation_type_summary(
-    counts: dict[tuple[str, Path, str], int],
+def _source_family_summary(
+    counts: dict[tuple[str, Path, str, str], int],
+    variants: dict[tuple[str, Path, str], set[str]],
     *,
     task: str,
     source: Path,
-) -> str:
-    type_counts = [
-        (generation_type, count)
-        for (count_task, count_source, generation_type), count in counts.items()
-        if count_task == task and count_source == source
-    ]
-    if len(type_counts) == 1:
-        generation_type, count = type_counts[0]
-        return f"{count} {generation_type}"
-    return ", ".join(
-        f"{count} {generation_type}" for generation_type, count in type_counts
+) -> list[str]:
+    lines = []
+    for family in _variant_family_order():
+        type_counts = {
+            generation_type: count
+            for (count_task, count_source, count_family, generation_type), count in (
+                counts.items()
+            )
+            if count_task == task
+            and count_source == source
+            and count_family == family
+        }
+        if not type_counts:
+            continue
+        variant_count = len(variants[(task, source, family)])
+        total = sum(type_counts.values())
+        type_summary = _summary_type_counts(type_counts)
+        if family == "pristine":
+            lines.append(f"pristine: {total} structure(s) ({type_summary})")
+        else:
+            lines.append(
+                f"{family}: {variant_count} variant(s), "
+                f"{total} structure(s) ({type_summary})"
+            )
+    return lines
+
+
+def _variant_family(variant: str) -> str:
+    if variant == "pristine":
+        return "pristine"
+    if variant.startswith("single_vacancy_"):
+        return "single vacancies"
+    if variant.startswith("double_vacancy_"):
+        return "double vacancies"
+    if variant.startswith("line_defect_"):
+        return "line defects"
+    return "other defects"
+
+
+def _variant_family_order() -> tuple[str, ...]:
+    return (
+        "pristine",
+        "single vacancies",
+        "double vacancies",
+        "line defects",
+        "other defects",
     )
+
+
+def _summary_type_counts(type_counts: dict[str, int]) -> str:
+    ordered = []
+    for generation_type in ("unperturbed", "surface", "perturb", "defect"):
+        count = type_counts.get(generation_type)
+        if count:
+            ordered.append((generation_type, count))
+    for generation_type, count in type_counts.items():
+        if generation_type not in {"unperturbed", "surface", "perturb", "defect"}:
+            ordered.append((generation_type, count))
+    return ", ".join(
+        f"{count} {_summary_generation_type_label(generation_type)}"
+        for generation_type, count in ordered
+    )
+
+
+def _summary_generation_type_label(generation_type: str) -> str:
+    if generation_type == "unperturbed":
+        return "unperturbed"
+    return "perturbed"
 
 
 def _summary_variant_label(generation_type: str, variant: str) -> str:

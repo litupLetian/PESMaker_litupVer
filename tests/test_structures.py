@@ -140,7 +140,7 @@ def test_surface_and_defect_variants_are_generated():
         },
     )
 
-    assert slab.cell.lengths()[2] >= 30.0
+    assert np.isclose(slab.cell.lengths()[2], 30.0)
     assert [variant.name for variant in variants] == [
         "pristine",
         "single_vacancy_Te_000001",
@@ -148,6 +148,30 @@ def test_surface_and_defect_variants_are_generated():
         "line_defect_Te_const_a_000001",
     ]
     assert [len(variant.atoms) for variant in variants] == [4, 3, 2, 2]
+
+
+def test_surface_vacuum_replaces_existing_vacuum():
+    """Surface vacuum is total empty space, not vacuum added on both sides."""
+    from ase import Atoms
+
+    atoms = Atoms(
+        "Te2",
+        positions=[
+            (0.0, 0.0, 20.0),
+            (0.0, 0.0, 22.0),
+        ],
+        cell=[3.0, 3.0, 80.0],
+        pbc=[True, True, False],
+    )
+
+    slab = apply_surface_settings(
+        atoms,
+        {"vacuum": 30.0, "axis": 2, "center": True},
+    )
+    positions = slab.get_positions()
+
+    assert np.isclose(slab.cell.lengths()[2], 32.0)
+    assert np.allclose(positions[:, 2], [15.0, 17.0])
 
 
 def test_random_vacancies_are_seeded_and_reproducible():
