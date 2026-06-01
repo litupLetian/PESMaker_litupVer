@@ -33,29 +33,32 @@ reactions.
 
 ## Workflow
 
-Direct generation and DFT labeling:
+Direct generation and DFT labeling. Use this when generated structures should
+go straight to VASP SCF labeling:
 
 ```bash
-pesmaker validate run.yaml
-pesmaker generate run.yaml
-pesmaker scf-setup run.yaml
-pesmaker submit run.yaml --dry-run   # preview SCF/VASP submissions
-pesmaker submit run.yaml             # submit SCF/VASP jobs
-pesmaker collect run.yaml
+pesmaker validate run.yaml           # check YAML syntax and required fields
+pesmaker generate run.yaml           # build supercells, surfaces, defects, and perturbations
+pesmaker scf-setup run.yaml          # prepare VASP SCF folders with POSCAR/INCAR/submit.sh
+pesmaker submit run.yaml --dry-run   # preview SCF/VASP submission commands
+pesmaker submit run.yaml             # submit prepared SCF/VASP jobs
+pesmaker collect run.yaml            # collect finished SCF outputs into a training dataset
 ```
 
-Full sampling, labeling, and training loop:
+Full sampling, labeling, and training loop. Use this when generated structures
+first seed MD sampling before DFT labeling:
 
 ```bash
-pesmaker generate run.yaml
-pesmaker sample-setup run.yaml
-pesmaker submit run.yaml --stage sampling   # submit MD sampling jobs
-pesmaker select run.yaml
-pesmaker scf-setup run.yaml
-pesmaker submit run.yaml                    # submit SCF/VASP jobs
-pesmaker collect run.yaml
-pesmaker train-setup run.yaml
-pesmaker submit run.yaml --stage training   # submit NEP training jobs
+pesmaker validate run.yaml                  # check YAML syntax and required fields
+pesmaker generate run.yaml                  # build initial structures for sampling
+pesmaker sample-setup run.yaml              # prepare GPUMD MD folders and submit.sh files
+pesmaker submit run.yaml --stage sampling   # submit prepared MD sampling jobs
+pesmaker select run.yaml                    # select representative frames from MD trajectories
+pesmaker scf-setup run.yaml                 # prepare VASP SCF folders for selected structures
+pesmaker submit run.yaml                    # submit prepared SCF/VASP jobs
+pesmaker collect run.yaml                   # collect finished SCF outputs into a training dataset
+pesmaker train-setup run.yaml               # prepare NEP training input files and submit.sh
+pesmaker submit run.yaml --stage training   # submit prepared NEP training jobs
 ```
 
 `submit` always submits `submit.sh` files that were prepared by an earlier
