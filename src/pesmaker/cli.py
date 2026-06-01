@@ -270,6 +270,7 @@ generation:
             elements: [Te]
             max_count: 2
         perturb:
+          include_pristine: true
           pert_num: 10
           cell_pert_fraction: 0.03
           atom_pert_distance: 0.1
@@ -278,6 +279,7 @@ generation:
     - name: bulk_333
       supercell: [3, 3, 3]
       perturb:
+        include_pristine: true
         pert_num: 10
         cell_pert_fraction: 0.03
         atom_pert_distance: 0.1

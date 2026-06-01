@@ -247,7 +247,7 @@ generation:
     assert exit_code == 0
     assert (output_dir / "te2d" / "pristine" / "surface_000000.vasp").exists()
     assert (
-        output_dir / "te2d" / "single_vacancy_Te_000000" / "defect_000000.vasp"
+        output_dir / "te2d" / "single_vacancy_Te_000001" / "defect_000000.vasp"
     ).exists()
     assert len(list(output_dir.glob("te2d/*/*.vasp"))) == 4
     summary = (output_dir / "generation_summary.txt").read_text(encoding="utf-8")
@@ -260,7 +260,7 @@ generation:
     assert f"      - input: {structure_path}" in summary
     assert "        generated: 1 surface, 3 defect structure(s)" in summary
     assert "surface ->" in summary
-    assert "defect:single_vacancy_Te_000000 ->" in summary
+    assert "defect:single_vacancy_Te_000001 ->" in summary
     assert "files ->" not in summary
     assert "pristine ->" not in summary
 
@@ -313,7 +313,7 @@ generation:
         output_dir
         / "surface_111"
         / "te"
-        / "single_vacancy_Te_000000"
+        / "single_vacancy_Te_000001"
         / "defect_000001.vasp"
     ).exists()
     assert (
@@ -339,6 +339,65 @@ generation:
     assert "Generation tasks:" in summary
     assert "surface_111: 1 input(s) ->" in summary
     assert "bulk_221: 1 input(s) ->" in summary
+
+
+def test_cli_generate_can_include_unperturbed_supercell(tmp_path):
+    """Generation can write one expanded structure before random perturbation."""
+    cif_path = tmp_path / "te.cif"
+    cif_path.write_text(
+        """data_te
+_symmetry_space_group_name_H-M    'P 1'
+_cell_length_a    3.0
+_cell_length_b    3.0
+_cell_length_c    3.0
+_cell_angle_alpha 90
+_cell_angle_beta  90
+_cell_angle_gamma 90
+loop_
+_atom_site_label
+_atom_site_type_symbol
+_atom_site_fract_x
+_atom_site_fract_y
+_atom_site_fract_z
+Te1 Te 0 0 0
+""",
+        encoding="utf-8",
+    )
+    output_dir = tmp_path / "generated"
+    config_path = tmp_path / "pesmaker.yaml"
+    config_path.write_text(
+        f"""project: test_generate
+structures:
+  - {cif_path.as_posix()}
+generation:
+  supercell: [2, 2, 1]
+  output_dir: {output_dir.as_posix()}
+  perturb:
+    include_pristine: true
+    pert_num: 2
+    seed: 7
+    format: vasp
+""",
+        encoding="utf-8",
+    )
+
+    assert main(["generate", str(config_path)]) == 0
+
+    assert (output_dir / "te" / "unperturbed.vasp").exists()
+    assert (output_dir / "te" / "perturb_000000.vasp").exists()
+    assert (output_dir / "te" / "perturb_000001.vasp").exists()
+    records = [
+        json.loads(line)
+        for line in (output_dir / "manifest.jsonl").read_text(
+            encoding="utf-8"
+        ).splitlines()
+    ]
+    assert [record["generation_type"] for record in records] == [
+        "unperturbed",
+        "perturb",
+        "perturb",
+    ]
+    assert records[0]["atom_count"] == 4
 
 
 def test_cli_prints_banner_for_commands(tmp_path, capsys):

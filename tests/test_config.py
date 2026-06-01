@@ -121,7 +121,11 @@ def test_generation_accepts_surface_nested_defects_and_perturb():
                     "defects": {
                         "single_vacancies": {"elements": ["Te"], "max_count": 2}
                     },
-                    "perturb": {"pert_num": 5, "format": "vasp"},
+                    "perturb": {
+                        "pert_num": 5,
+                        "format": "vasp",
+                        "include_pristine": True,
+                    },
                 },
             },
         }
@@ -130,6 +134,7 @@ def test_generation_accepts_surface_nested_defects_and_perturb():
     assert config.generation.surface["vacuum"] == 30
     assert config.generation.defects["single_vacancies"]["max_count"] == 2
     assert config.generation.perturb["pert_num"] == 5
+    assert config.generation.perturb["include_pristine"] is True
 
 
 def test_generation_accepts_multiple_tasks_and_defect_perturb():

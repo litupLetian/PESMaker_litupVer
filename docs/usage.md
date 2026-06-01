@@ -60,6 +60,7 @@ generation:
             elements: [Te]
             max_count: 4
         perturb:
+          include_pristine: true
           pert_num: 10
           format: vasp
 

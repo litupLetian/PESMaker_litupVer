@@ -114,6 +114,7 @@ generation:
             elements: [Te]
             max_count: 4
         perturb:
+          include_pristine: true
           pert_num: 20
           cell_pert_fraction: 0.03
           atom_pert_distance: 0.1
@@ -123,6 +124,7 @@ generation:
     - name: bulk_333
       supercell: [3, 3, 3]
       perturb:
+        include_pristine: true
         pert_num: 20
         cell_pert_fraction: 0.03
         atom_pert_distance: 0.1
@@ -205,6 +207,7 @@ generation:
     - name: bulk_333
       supercell: [3, 3, 3]
       perturb:
+        include_pristine: true
         pert_num: 20
         cell_pert_fraction: 0.03
         atom_pert_distance: 0.1
@@ -216,6 +219,8 @@ generation:
 Important perturbation fields:
 
 - `pert_num`: number of structures generated from each variant;
+- `include_pristine`: when `true`, also write `unperturbed.<format>` for the
+  expanded structure before random cell and atom perturbations;
 - `cell_pert_fraction`: random cell perturbation amplitude;
 - `atom_pert_distance`: atomic displacement scale in Angstrom;
 - `atom_pert_style`: `normal`, `uniform`, or `const`;
@@ -259,6 +264,7 @@ surface:
       elements: [Te]
       max_count: 4
   perturb:
+    include_pristine: true
     pert_num: 20
     format: vasp
 ```
@@ -271,6 +277,11 @@ Supported variant families:
 - `double_vacancies`: remove atom pairs, with nearest pairs generated first by
   default;
 - `line_defects`: remove atom rows, with row grouping inferred automatically.
+
+Defect folder suffixes are 1-based serial numbers within each defect family,
+not atom IDs. For example, `single_vacancy_Te_000001` is the first selected Te
+single vacancy. The exact removed atom indices are stored in `manifest.jsonl`
+as `variant_description`.
 
 For reproducible random choices, set:
 
@@ -297,6 +308,11 @@ enough:
 - `coordinate_axis`: fractional coordinate used to group rows;
 - `tolerance`: fractional-coordinate bin width for row grouping.
 
+Line-defect folder names use `const_a`, `const_b`, or `const_c` for the
+fractional coordinate held constant while grouping a row. In an orthogonal 2D
+cell, `const_a` is usually a row running along the b/y direction, so it is not
+the same thing as "line along x".
+
 Expected output:
 
 ```text
@@ -306,16 +322,18 @@ generated/
   surface_331/
     Te-mp-19/
       pristine/
+        unperturbed.vasp
         surface_000000.vasp
-      single_vacancy_Te_000000/
+      single_vacancy_Te_000001/
         defect_000000.vasp
-      double_vacancy_Te000000_Te000001/
+      double_vacancy_Te_000001/
         defect_000000.vasp
-      line_defect_axis1_000/
+      line_defect_Te_const_b_000001/
         defect_000000.vasp
   bulk_333/
     Te-mp-19/
       pristine/
+        unperturbed.vasp
         perturb_000000.vasp
 ```
 
@@ -489,7 +507,7 @@ dropped from calculation folder names:
 labeling/
   surface_331/
     Te-mp-19/
-      single_vacancy_Te_000000/
+      single_vacancy_Te_000001/
         defect_000000/
           POSCAR
           defect_000000.vasp-bak
