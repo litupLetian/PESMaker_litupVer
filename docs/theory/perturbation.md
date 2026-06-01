@@ -101,5 +101,6 @@ perturb:
 
 These values generate moderately distorted structures around the starting
 geometry and are useful for preparing initial DFT single-point candidates.
-`include_pristine: true` also writes the expanded, unperturbed pristine
-structure as `unperturbed.<format>` in the generated output.
+The expanded, unperturbed pristine structure is always written as
+`unperturbed.<format>`. `include_pristine: true` also writes one
+`unperturbed.<format>` file for every generated defect variant.

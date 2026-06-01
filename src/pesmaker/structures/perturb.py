@@ -36,8 +36,9 @@ class PerturbationSettings:
             values are `normal`, `uniform`, and `const`.
         atom_pert_prob: Fraction of atoms selected for atomic displacement.
         seed: Optional random seed for reproducible perturbations.
-        include_pristine: Whether to also write the unperturbed base structure
-            before random perturbations in generation workflows.
+        include_pristine: Whether to also write an unperturbed structure for
+            every generated variant. The pristine variant is always written
+            once before random perturbations in generation workflows.
     """
 
     pert_num: int = 1
