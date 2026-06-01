@@ -306,16 +306,89 @@ defects:
     max_count: 8
 ```
 
-Advanced line-defect controls are available when automatic row detection is not
-enough:
+Line-defect generation has two separate steps:
 
-- `coordinate_axis`: fractional coordinate used to group rows;
-- `tolerance`: fractional-coordinate bin width for row grouping.
+1. Group candidate atoms into rows.
+2. Select which rows to remove.
 
-Line-defect folder names use `const_a`, `const_b`, or `const_c` for the
-fractional coordinate held constant while grouping a row. In an orthogonal 2D
-cell, `const_a` is usually a row running along the b/y direction, so it is not
-the same thing as "line along x".
+`coordinate_axis` controls only the row grouping step. It is not the random
+selection switch.
+
+```yaml
+line_defects:
+  elements: [Te]
+  max_count: 5
+  coordinate_axis: 0
+```
+
+The `coordinate_axis` values are fractional-coordinate axes:
+
+- `coordinate_axis: 0`: group atoms with similar fractional `a` coordinate;
+- `coordinate_axis: 1`: group atoms with similar fractional `b` coordinate;
+- `coordinate_axis: 2`: group atoms with similar fractional `c` coordinate,
+  which is usually not useful for in-plane line defects in 2D slabs.
+
+Folder names use `const_a`, `const_b`, or `const_c` for the fractional
+coordinate held constant while grouping a row. In an orthogonal 2D cell,
+`const_a` usually means the removed row runs along the b/y direction, while
+`const_b` usually means the removed row runs along the a/x direction. For
+hexagonal or other non-orthogonal cells, use the lattice vectors rather than
+Cartesian x/y labels when interpreting the line direction.
+
+If `coordinate_axis` is omitted, PESMaker tries fractional `a` and `b`, then
+uses the axis that gives the clearest row grouping. It does not infer
+fractional `c` automatically for 2D line defects.
+
+`tolerance` controls how close fractional coordinates must be to count as the
+same row:
+
+```yaml
+line_defects:
+  elements: [Te]
+  max_count: 5
+  coordinate_axis: 1
+  tolerance: 0.03
+```
+
+If `tolerance` is omitted, PESMaker infers it from the spacing between
+candidate fractional coordinates.
+
+Row selection is controlled by `mode` or `selection`:
+
+```yaml
+defects:
+  mode: random
+  seed: 42
+  line_defects:
+    elements: [Te]
+    max_count: 5
+    coordinate_axis: 1
+```
+
+With `mode: random`, PESMaker randomly selects `max_count` rows from the
+grouped rows. The `seed` makes the random selection reproducible, so running
+the same config again gives the same line defects.
+
+Without `mode: random`, row selection is deterministic: PESMaker sorts rows by
+row size and atom index, then takes the first `max_count` rows. This is useful
+for debugging but is not a random sampling of line positions.
+
+Per-family settings can override the global defect mode:
+
+```yaml
+defects:
+  mode: random
+  seed: 42
+  line_defects:
+    selection: ordered
+    elements: [Te]
+    max_count: 5
+    coordinate_axis: 0
+```
+
+The exact removed atom indices are written in `manifest.jsonl` under
+`variant_description`, for example `line defect: fixed fractional b coordinate,
+remove atoms [1, 4, 7, 10]`.
 
 Expected output:
 
