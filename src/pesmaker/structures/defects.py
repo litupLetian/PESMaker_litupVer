@@ -63,13 +63,38 @@ def apply_surface_settings(atoms, settings: dict[str, Any] | None):
         vacuum_value = float(vacuum)
         if vacuum_value < 0:
             raise ValueError("generation.surface.vacuum can not be negative")
-        if center:
-            result.center(vacuum=vacuum_value, axis=axis)
-        else:
-            cell = result.cell.array.copy()
-            cell[axis] = cell[axis] / np.linalg.norm(cell[axis]) * vacuum_value
-            result.set_cell(cell, scale_atoms=False)
+        _set_total_vacuum(result, axis=axis, vacuum=vacuum_value, center=center)
     return result
+
+
+def _set_total_vacuum(atoms, *, axis: int, vacuum: float, center: bool) -> None:
+    cell = atoms.cell.array.copy()
+    axis_vector = cell[axis]
+    axis_length = np.linalg.norm(axis_vector)
+    if axis_length <= 0:
+        raise ValueError("generation.surface.axis cell vector has zero length")
+
+    axis_unit = axis_vector / axis_length
+    positions = atoms.get_positions()
+    if len(atoms):
+        projections = positions @ axis_unit
+        slab_min = float(np.min(projections))
+        slab_max = float(np.max(projections))
+    else:
+        slab_min = 0.0
+        slab_max = 0.0
+
+    target_length = (slab_max - slab_min) + vacuum
+    if target_length <= 0:
+        raise ValueError("generation.surface.vacuum is too small for this slab")
+
+    cell[axis] = axis_unit * target_length
+    atoms.set_cell(cell, scale_atoms=False)
+    if center and len(atoms):
+        target_center = float(np.dot(cell.sum(axis=0) * 0.5, axis_unit))
+        slab_center = 0.5 * (slab_min + slab_max)
+        shifted = positions + axis_unit * (target_center - slab_center)
+        atoms.set_positions(shifted)
 
 
 def generate_defect_variants(

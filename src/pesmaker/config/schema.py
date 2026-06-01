@@ -106,7 +106,7 @@ class GenerationConfig:
             `PerturbationSettings`. These can be written directly under
             `generation.perturb` or nested under `generation.surface.perturb`.
             Set `include_pristine: true` inside `perturb` to also write the
-            expanded unperturbed structure before random perturbations.
+            expanded unperturbed pristine structure before random perturbations.
         tasks: Independent generation tasks. New configs should use this when
             multiple supercells or nested operation chains are needed.
     """

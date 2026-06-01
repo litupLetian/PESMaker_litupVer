@@ -219,8 +219,8 @@ generation:
 Important perturbation fields:
 
 - `pert_num`: number of structures generated from each variant;
-- `include_pristine`: when `true`, also write `unperturbed.<format>` for the
-  expanded structure before random cell and atom perturbations;
+- `include_pristine`: when `true`, also write `unperturbed.<format>` in the
+  `pristine/` output before random cell and atom perturbations;
 - `cell_pert_fraction`: random cell perturbation amplitude;
 - `atom_pert_distance`: atomic displacement scale in Angstrom;
 - `atom_pert_style`: `normal`, `uniform`, or `const`;
@@ -238,9 +238,11 @@ surface:
   center: true
 ```
 
-`vacuum` is the vacuum thickness in Angstrom. `axis: 2` adds vacuum along the
-z direction, which is the usual choice for structures lying in the xy plane.
-`center: true` places the slab in the middle of the vacuum direction.
+`vacuum` is the total empty-space thickness in Angstrom. Existing vacuum in
+the input structure is replaced, so `vacuum: 30.0` gives about 30 Angstrom of
+empty space total, not 30 Angstrom added to each side. `axis: 2` applies this
+along the z direction, which is the usual choice for structures lying in the xy
+plane. `center: true` places the slab in the middle of the vacuum direction.
 
 ### Defects
 
@@ -339,6 +341,19 @@ generated/
 
 `manifest.jsonl` is machine-readable. `generation_summary.txt` is the faster
 file to inspect by eye.
+
+The generate command summary groups counts by defect family so it is clear how
+many pristine, single-vacancy, double-vacancy, and line-defect structures were
+written. For example, `max_count: 5` and `pert_num: 3` with
+`include_pristine: true` gives this per input:
+
+```text
+per input:
+  pristine: 4 structure(s) (1 unperturbed, 3 perturbed)
+  single vacancies: 5 variant(s), 15 structure(s) (15 perturbed)
+  double vacancies: 5 variant(s), 15 structure(s) (15 perturbed)
+  line defects: 5 variant(s), 15 structure(s) (15 perturbed)
+```
 
 ## Stage 2: Prepare Sampling Jobs
 
