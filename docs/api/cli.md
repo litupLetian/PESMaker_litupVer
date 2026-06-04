@@ -52,6 +52,11 @@ Select representative MD trajectory frames with farthest point sampling:
 pesmaker select examples/te_defect_md.yaml
 ```
 
+By default this uses Calorine NEP descriptors from `sampling.selection.potential`
+or `sampling.potential`, writes `selected/selection_features.npy`, and writes a
+PCA diagnostic plot at `selected/fps_selection.png`. Set
+`sampling.selection.descriptor: simple` only for lightweight debugging.
+
 ## `pesmaker scf-setup`
 
 Prepare SCF calculation folders:
