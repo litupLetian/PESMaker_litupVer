@@ -584,7 +584,7 @@ temperature: 300-1500
 GPUMD NPT ensemble mode:
 
 ```yaml
-ensemble_mode: auto       # auto, orthogonal, triclinic, or 2d
+ensemble_mode: auto       # auto, orthogonal, triclinic, 2d, or 2d_triclinic
 run_steps: 3000000
 ```
 
@@ -593,13 +593,22 @@ input structure:
 
 - `orthogonal`: 3 pressures, 3 elastic constants, pressure coupling;
 - `triclinic`: 6 pressures, 6 elastic constants, pressure coupling;
-- `2d`: orthogonal form with a stiffer out-of-plane elastic constant.
+- `2d`: orthogonal form with a stiffer out-of-plane elastic constant;
+- `2d_triclinic`: triclinic form with stiff out-of-plane normal and shear
+  elastic constants.
 
 Default elastic constants are `[50, 50, 50]` for orthogonal boxes, six `50`
-values for triclinic boxes, and `[50, 50, 200]` for 2D slabs. 2D detection uses
-non-periodic directions when present and otherwise falls back to a vacuum
-heuristic. Set `ensemble_mode: 2d` explicitly when your 2D CIF keeps periodic
-boundary conditions along the vacuum direction.
+values for triclinic boxes, and `[50, 50, 200]` for orthogonal 2D slabs. For
+2D triclinic slabs with out-of-plane `z`, the default elastic constants are
+`[50, 50, 200, 200, 200, 50]` in GPUMD's
+`C_xx C_yy C_zz C_yz C_xz C_xy` order. 2D detection uses non-periodic
+directions when present and otherwise falls back to a vacuum heuristic. Set
+`ensemble_mode: 2d` or `ensemble_mode: 2d_triclinic` explicitly when your 2D
+CIF keeps periodic boundary conditions along the vacuum direction.
+For `2d_triclinic`, GPUMD's triclinic pressure-control form uses six pressure
+components and six elastic constants; keep the slab periodic in all directions
+with enough vacuum, because GPUMD documents triclinic NPT pressure control for
+fully periodic triclinic boxes.
 
 Expected output:
 
@@ -641,27 +650,40 @@ sampling:
   selection:
     trajectory_pattern: sampling/**/movie.xyz
     output_dir: selected
+    descriptor: calorine
+    potential: nep89_20250409.txt
+    descriptor_pooling: mean
     min_distance: 0.2
     max_count: 200
+    plot: true
 ```
 
-The current selector uses farthest point sampling on simple structural
-features. It keeps adding the frame farthest from the selected set until
+The default selector uses Calorine to evaluate NEP descriptors, averages the
+atomic descriptors into one structure descriptor per frame, then runs farthest
+point sampling. It keeps adding the frame farthest from the selected set until
 `max_count` is reached or the nearest-selected distance falls below
-`min_distance`.
+`min_distance`. If `sampling.selection.potential` is omitted, PESMaker falls
+back to `sampling.potential`.
+
+For quick debugging without Calorine, set `descriptor: simple`; this uses a
+small geometry-based feature vector and should not be treated as a production
+active-learning selector.
 
 Expected output:
 
 ```text
 selected/
   selected.xyz
+  selection_features.npy
+  fps_selection.png
   selected_000000.xyz
   selected_000001.xyz
   manifest.jsonl
 ```
 
-Use `selected.xyz` for quick visual inspection. Use `selected/manifest.jsonl`
-as the input to `scf-setup`.
+Use `selected.xyz` for quick visual inspection. Use `fps_selection.png` to
+check the selected frames in a PCA projection of descriptor space. Use
+`selected/manifest.jsonl` as the input to `scf-setup`.
 
 ## `scf-setup`: Prepare VASP Labeling Jobs
 

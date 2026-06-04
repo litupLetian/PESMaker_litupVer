@@ -128,8 +128,11 @@ sampling:
   selection:
     trajectory_pattern: sampling/**/movie.xyz
     output_dir: selected
+    descriptor: calorine
+    potential: nep89_20250409.txt
     min_distance: 0.2
     max_count: 200
+    plot: true
 
 labeling:
   engine: vasp

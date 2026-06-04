@@ -173,6 +173,12 @@ For development and documentation:
 python -m pip install -e ".[dev,docs]"
 ```
 
+For Calorine NEP descriptor-based frame selection:
+
+```bash
+python -m pip install -e ".[selection]"
+```
+
 Check the command-line interface:
 
 ```bash

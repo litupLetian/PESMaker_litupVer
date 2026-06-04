@@ -367,8 +367,12 @@ def select_sampling_frames(config: PESMakerConfig) -> StageResult:
     max_count = int(max_count) if max_count is not None else None
 
     frames = _read_trajectory_frames(pattern)
-    features = _structure_features(frames)
-    selected_indices = _farthest_point_indices(
+    features, descriptor_backend = _selection_features(
+        frames,
+        options,
+        sampling_options=config.sampling.options,
+    )
+    selected_indices, selection_distances = _farthest_point_indices(
         features,
         min_distance=min_distance,
         max_count=max_count,
@@ -376,12 +380,23 @@ def select_sampling_frames(config: PESMakerConfig) -> StageResult:
     selected = [frames[index] for index in selected_indices]
 
     output_dir.mkdir(parents=True, exist_ok=True)
+    features_path = output_dir / "selection_features.npy"
+    np.save(features_path, features)
+    plot_path = _write_selection_plot(
+        features,
+        selected_indices,
+        selection_distances,
+        output_dir=output_dir,
+        options=options,
+    )
     selected_path = output_dir / "selected.xyz"
     _write_extxyz_many(selected_path, selected)
     selected_files = []
     manifest_path = output_dir / "manifest.jsonl"
     with manifest_path.open("w", encoding="utf-8") as manifest:
-        for index, (frame_index, atoms) in enumerate(zip(selected_indices, selected)):
+        for index, (frame_index, atoms, distance) in enumerate(
+            zip(selected_indices, selected, selection_distances)
+        ):
             frame_path = output_dir / f"selected_{index:06d}.xyz"
             write_structure(atoms, frame_path, fmt="extxyz")
             selected_files.append(frame_path)
@@ -391,13 +406,18 @@ def select_sampling_frames(config: PESMakerConfig) -> StageResult:
                         "index": index,
                         "source_frame": frame_index,
                         "path": str(frame_path),
+                        "descriptor": descriptor_backend,
+                        "selection_distance": distance,
                     }
                 )
                 + "\n"
             )
+    files = [selected_path, features_path, *selected_files, manifest_path]
+    if plot_path is not None:
+        files.append(plot_path)
     return StageResult(
         output_dir,
-        (selected_path, *selected_files, manifest_path),
+        tuple(files),
         f"Selected {len(selected)} of {len(frames)} MD frame(s)",
     )
 
@@ -1094,17 +1114,22 @@ def _sampling_ensemble_line(
         float(options.get("pressure_coupling", DEFAULT_GPUMD_PRESSURE_COUPLING))
     )
 
-    if mode == "triclinic":
+    if mode in {"triclinic", "2d_triclinic"}:
         pressures = _sampling_float_values(
             options.get("pressure", options.get("pressures", 0.0)),
             count=6,
             default=(0.0, 0.0, 0.0, 0.0, 0.0, 0.0),
             shear_default=0.0,
         )
+        default_elastic = (
+            _default_2d_triclinic_elastic(options, atoms)
+            if mode == "2d_triclinic"
+            else DEFAULT_GPUMD_TRICLINIC_ELASTIC
+        )
         elastic = _sampling_float_values(
             options.get("elastic_constants", options.get("elastic", None)),
             count=6,
-            default=DEFAULT_GPUMD_TRICLINIC_ELASTIC,
+            default=default_elastic,
         )
     else:
         default_elastic = (
@@ -1141,22 +1166,47 @@ def _sampling_ensemble_mode(options: dict[str, Any], atoms) -> str:
         "triclinic": "triclinic",
         "tri": "triclinic",
         "2d": "2d",
+        "2d_orthogonal": "2d",
+        "2d-orthogonal": "2d",
+        "2d_triclinic": "2d_triclinic",
+        "2d-triclinic": "2d_triclinic",
         "slab": "2d",
         "surface": "2d",
     }
     if raw_mode not in aliases:
         raise ValueError(
             "sampling.ensemble_mode must be one of: auto, orthogonal, "
-            "triclinic, 2d"
+            "triclinic, 2d, 2d_triclinic"
         )
     mode = aliases[raw_mode]
+    if mode == "2d":
+        return "2d" if _is_orthogonal_cell(atoms) else "2d_triclinic"
     if mode != "auto":
         return mode
     if _is_two_dimensional_sampling_cell(options, atoms):
-        return "2d"
+        return "2d" if _is_orthogonal_cell(atoms) else "2d_triclinic"
     if _is_orthogonal_cell(atoms):
         return "orthogonal"
     return "triclinic"
+
+
+def _default_2d_triclinic_elastic(options: dict[str, Any], atoms) -> tuple[float, ...]:
+    values = [50.0, 50.0, 50.0, 50.0, 50.0, 50.0]
+    axis = _two_dimensional_axis(options, atoms)
+    if axis is None:
+        axis = 2
+    for index in _triclinic_elastic_indices_for_axis(axis):
+        values[index] = 200.0
+    return tuple(values)
+
+
+def _triclinic_elastic_indices_for_axis(axis: int) -> tuple[int, ...]:
+    # GPUMD triclinic order: C_xx, C_yy, C_zz, C_yz, C_xz, C_xy.
+    if axis == 0:
+        return (0, 4, 5)
+    if axis == 1:
+        return (1, 3, 5)
+    return (2, 3, 4)
 
 
 def _sampling_float_values(
@@ -1198,19 +1248,25 @@ def _is_orthogonal_cell(atoms) -> bool:
 
 
 def _is_two_dimensional_sampling_cell(options: dict[str, Any], atoms) -> bool:
+    return _two_dimensional_axis(options, atoms) is not None
+
+
+def _two_dimensional_axis(options: dict[str, Any], atoms) -> int | None:
     pbc = np.asarray(atoms.pbc, dtype=bool)
     if pbc.shape == (3,) and not bool(np.all(pbc)):
-        return True
+        nonperiodic = np.where(~pbc)[0]
+        if len(nonperiodic):
+            return int(nonperiodic[0])
 
     if len(atoms) == 0:
-        return False
+        return None
     threshold = float(
         options.get("two_dimensional_vacuum_threshold", DEFAULT_2D_VACUUM_THRESHOLD)
     )
     ratio = float(options.get("two_dimensional_vacuum_ratio", DEFAULT_2D_VACUUM_RATIO))
     cell = np.asarray(atoms.cell.array, dtype=float)
     positions = np.asarray(atoms.get_positions(), dtype=float)
-    for axis_vector in cell:
+    for axis, axis_vector in enumerate(cell):
         length = float(np.linalg.norm(axis_vector))
         if length <= 0.0:
             continue
@@ -1219,8 +1275,8 @@ def _is_two_dimensional_sampling_cell(options: dict[str, Any], atoms) -> bool:
         span = float(np.max(projections) - np.min(projections))
         vacuum = max(length - span, 0.0)
         if vacuum >= threshold and (span <= 0.0 or vacuum >= ratio * span):
-            return True
-    return False
+            return int(axis)
+    return None
 
 
 def _prepare_sampling_potential(
@@ -1722,6 +1778,70 @@ def _write_extxyz_many(path: Path, frames) -> None:
     write(path, frames, format="extxyz")
 
 
+def _selection_features(
+    frames,
+    options: dict[str, Any],
+    *,
+    sampling_options: dict[str, Any],
+) -> tuple[np.ndarray, str]:
+    descriptor = str(options.get("descriptor", "calorine")).lower()
+    if descriptor in {"calorine", "nep", "calorine-nep", "calorine_nep"}:
+        potential = options.get(
+            "potential",
+            options.get("model", sampling_options.get("potential")),
+        )
+        features = _calorine_nep_structure_features(frames, potential, options)
+        return features, "calorine"
+    if descriptor in {"simple", "geometry"}:
+        return _structure_features(frames), "simple"
+    raise ValueError("sampling.selection.descriptor must be 'calorine' or 'simple'")
+
+
+def _calorine_nep_structure_features(
+    frames,
+    potential: Any,
+    options: dict[str, Any],
+) -> np.ndarray:
+    if not potential:
+        raise ValueError(
+            "sampling.selection.potential or sampling.potential is required "
+            "for Calorine NEP descriptor selection"
+        )
+    try:
+        from calorine.nep import get_descriptors
+    except ImportError as exc:
+        raise RuntimeError(
+            "Calorine NEP descriptor selection requires calorine. Install it "
+            'with `python -m pip install ".[selection]"` or `python -m pip '
+            "install calorine`."
+        ) from exc
+
+    potential_path = Path(str(potential))
+    pooling = str(options.get("descriptor_pooling", options.get("pooling", "mean")))
+    features = []
+    for atoms in frames:
+        descriptors = np.asarray(
+            get_descriptors(atoms, model_filename=str(potential_path)),
+            dtype=float,
+        )
+        if descriptors.ndim == 1:
+            descriptors = descriptors.reshape(1, -1)
+        features.append(_pool_atom_descriptors(descriptors, pooling))
+    return np.vstack(features)
+
+
+def _pool_atom_descriptors(descriptors: np.ndarray, pooling: str) -> np.ndarray:
+    if pooling == "mean":
+        return descriptors.mean(axis=0)
+    if pooling == "sum":
+        return descriptors.sum(axis=0)
+    if pooling in {"mean_std", "mean+std"}:
+        return np.concatenate([descriptors.mean(axis=0), descriptors.std(axis=0)])
+    raise ValueError(
+        "sampling.selection.descriptor_pooling must be mean, sum, or mean_std"
+    )
+
+
 def _structure_features(frames) -> np.ndarray:
     raw = []
     max_length = 0
@@ -1743,17 +1863,92 @@ def _farthest_point_indices(
     *,
     min_distance: float,
     max_count: int | None,
-) -> list[int]:
+) -> tuple[list[int], list[float]]:
+    if len(features) == 0:
+        return [], []
+    if max_count is not None and max_count < 1:
+        return [], []
+
     selected = [0]
+    selected_distances = [0.0]
     distances = np.linalg.norm(features - features[0], axis=1)
     while True:
+        if max_count is not None and len(selected) >= max_count:
+            break
         next_index = int(np.argmax(distances))
         next_distance = float(distances[next_index])
         if next_index in selected or next_distance < min_distance:
             break
-        if max_count is not None and len(selected) >= max_count:
-            break
         selected.append(next_index)
+        selected_distances.append(next_distance)
         new_distances = np.linalg.norm(features - features[next_index], axis=1)
         distances = np.minimum(distances, new_distances)
-    return selected
+        distances[selected] = 0.0
+    return selected, selected_distances
+
+
+def _write_selection_plot(
+    features: np.ndarray,
+    selected_indices: list[int],
+    selection_distances: list[float],
+    *,
+    output_dir: Path,
+    options: dict[str, Any],
+) -> Path | None:
+    if not bool(options.get("plot", True)):
+        return None
+    try:
+        import matplotlib
+
+        matplotlib.use("Agg", force=True)
+        import matplotlib.pyplot as plt
+    except ImportError as exc:
+        raise RuntimeError(
+            "Selection plotting requires matplotlib. Install it with "
+            "`python -m pip install matplotlib` or set sampling.selection.plot: false."
+        ) from exc
+
+    points = _pca_2d(features)
+    plot_path = Path(str(options.get("plot_path", output_dir / "fps_selection.png")))
+    plot_path.parent.mkdir(parents=True, exist_ok=True)
+
+    fig, (ax_points, ax_distances) = plt.subplots(1, 2, figsize=(11, 4.5))
+    ax_points.scatter(points[:, 0], points[:, 1], s=18, c="#9aa0a6", label="all frames")
+    if selected_indices:
+        selected_points = points[selected_indices]
+        ax_points.scatter(
+            selected_points[:, 0],
+            selected_points[:, 1],
+            s=42,
+            c="#d62728",
+            label="selected",
+        )
+        for order, (x_value, y_value) in enumerate(selected_points[:50]):
+            ax_points.annotate(str(order), (x_value, y_value), fontsize=7)
+    ax_points.set_title("FPS selection in descriptor PCA space")
+    ax_points.set_xlabel("PC1")
+    ax_points.set_ylabel("PC2")
+    ax_points.legend(frameon=False)
+
+    ax_distances.plot(range(len(selection_distances)), selection_distances, marker="o")
+    ax_distances.set_title("Distance when selected")
+    ax_distances.set_xlabel("Selection order")
+    ax_distances.set_ylabel("Nearest-selected distance")
+
+    fig.tight_layout()
+    fig.savefig(plot_path, dpi=180)
+    plt.close(fig)
+    return plot_path
+
+
+def _pca_2d(features: np.ndarray) -> np.ndarray:
+    if len(features) == 0:
+        return np.zeros((0, 2), dtype=float)
+    centered = features - np.mean(features, axis=0)
+    if centered.shape[0] == 1:
+        return np.zeros((1, 2), dtype=float)
+    _, _, vh = np.linalg.svd(centered, full_matrices=False)
+    points = centered @ vh[: min(2, len(vh))].T
+    if points.shape[1] == 1:
+        points = np.column_stack([points[:, 0], np.zeros(len(points))])
+    return points[:, :2]

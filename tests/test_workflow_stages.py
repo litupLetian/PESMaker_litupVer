@@ -19,6 +19,8 @@ from __future__ import annotations
 
 import json
 
+import numpy as np
+
 from pesmaker.cli import _print_submit_result, main
 from pesmaker.config.io import load_config
 from pesmaker.workflow.stages import (
@@ -1100,6 +1102,12 @@ def test_sampling_setup_selects_gpumd_ensemble_by_cell_shape(tmp_path):
             cell=[5.0, 5.0, 40.0],
             pbc=[True, True, False],
         ),
+        Atoms(
+            "Te2",
+            positions=[(0.0, 0.0, 10.0), (1.0, 1.0, 11.0)],
+            cell=[(5.0, 0.0, 0.0), (1.0, 5.0, 0.0), (0.0, 0.0, 40.0)],
+            pbc=[True, True, False],
+        ),
     ]
     generated_dir = tmp_path / "generated"
     generated_dir.mkdir()
@@ -1136,6 +1144,9 @@ sampling:
     two_dimensional = (
         tmp_path / "sampling" / "md_000002_temp_300K" / "run.in"
     ).read_text(encoding="utf-8")
+    two_dimensional_triclinic = (
+        tmp_path / "sampling" / "md_000003_temp_300K" / "run.in"
+    ).read_text(encoding="utf-8")
 
     assert "ensemble       npt_scr 300 300 100 0 0 0 50 50 50 1000" in orthogonal
     assert (
@@ -1146,6 +1157,10 @@ sampling:
         "ensemble       npt_scr 300 300 100 0 0 0 50 50 200 1000"
         in two_dimensional
     )
+    assert (
+        "ensemble       npt_scr 300 300 100 0 0 0 0 0 0 "
+        "50 50 200 200 200 50 1000"
+    ) in two_dimensional_triclinic
 
 
 def test_sampling_setup_respects_run_steps_and_forced_gpumd_cell_mode(tmp_path):
@@ -1220,6 +1235,7 @@ sampling:
   selection:
     trajectory_pattern: {trajectory.as_posix()}
     output_dir: {selected_dir.as_posix()}
+    descriptor: simple
     min_distance: 0.2
 """,
         encoding="utf-8",
@@ -1229,4 +1245,73 @@ sampling:
     assert main(["select", str(config_path)]) == 0
 
     assert (selected_dir / "selected.xyz").exists()
-    assert len((selected_dir / "manifest.jsonl").read_text(encoding="utf-8").splitlines()) == 2
+    assert (selected_dir / "selection_features.npy").exists()
+    assert (selected_dir / "fps_selection.png").exists()
+    records = [
+        json.loads(line)
+        for line in (selected_dir / "manifest.jsonl").read_text(
+            encoding="utf-8"
+        ).splitlines()
+    ]
+    assert len(records) == 2
+    assert {record["descriptor"] for record in records} == {"simple"}
+
+
+def test_select_can_use_calorine_nep_descriptors(tmp_path, monkeypatch):
+    """Calorine NEP descriptors should feed farthest point sampling."""
+    import sys
+    import types
+
+    from ase import Atoms
+    from ase.io import write
+
+    def fake_get_descriptors(atoms, *, model_filename):
+        positions = atoms.get_positions()
+        value = float(np.mean(positions[:, 0]))
+        return np.array([[value, value**2], [value + 0.1, value**2 + 0.1]])
+
+    calorine_module = types.ModuleType("calorine")
+    nep_module = types.ModuleType("calorine.nep")
+    nep_module.get_descriptors = fake_get_descriptors
+    monkeypatch.setitem(sys.modules, "calorine", calorine_module)
+    monkeypatch.setitem(sys.modules, "calorine.nep", nep_module)
+
+    frames = [
+        Atoms("Te2", positions=[(0.0, 0.0, 0.0), (0.2, 0.0, 0.0)], cell=[3, 3, 20], pbc=True),
+        Atoms("Te2", positions=[(0.1, 0.0, 0.0), (0.3, 0.0, 0.0)], cell=[3, 3, 20], pbc=True),
+        Atoms("Te2", positions=[(1.5, 0.0, 0.0), (1.7, 0.0, 0.0)], cell=[3, 3, 20], pbc=True),
+    ]
+    trajectory = tmp_path / "movie.xyz"
+    write(trajectory, frames, format="extxyz")
+    potential = tmp_path / "nep89.txt"
+    potential.write_text("fake potential\n", encoding="utf-8")
+    selected_dir = tmp_path / "selected"
+    config_path = tmp_path / "pesmaker.yaml"
+    config_path.write_text(
+        f"""project: calorine_select
+sampling:
+  engine: gpumd
+  potential: {potential.as_posix()}
+  selection:
+    trajectory_pattern: {trajectory.as_posix()}
+    output_dir: {selected_dir.as_posix()}
+    descriptor: calorine
+    min_distance: 0.2
+    max_count: 2
+""",
+        encoding="utf-8",
+    )
+
+    assert main(["select", str(config_path)]) == 0
+
+    features = np.load(selected_dir / "selection_features.npy")
+    assert features.shape == (3, 2)
+    assert (selected_dir / "fps_selection.png").exists()
+    records = [
+        json.loads(line)
+        for line in (selected_dir / "manifest.jsonl").read_text(
+            encoding="utf-8"
+        ).splitlines()
+    ]
+    assert [record["source_frame"] for record in records] == [0, 2]
+    assert {record["descriptor"] for record in records} == {"calorine"}
