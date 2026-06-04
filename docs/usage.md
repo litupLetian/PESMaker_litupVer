@@ -122,6 +122,8 @@ sampling:
   gpumd_dir: /path/to/GPUMD/src
   potential: nep89_20250409.txt
   temperatures: [300, 600, 900]
+  run_steps: 3000000
+  ensemble_mode: auto
   run_in: templates/gpumd/run.in
   selection:
     trajectory_pattern: sampling/**/movie.xyz

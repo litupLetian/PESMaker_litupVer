@@ -1,8 +1,8 @@
 potential      {potential}
 velocity       {temperature_start}
 
-ensemble       npt_scr {temperature_start} {temperature_end} 100 0 0 0 20 20 100 1000
+ensemble       npt_scr {temperature_start} {temperature_end} 100 0 0 0 50 50 50 1000
 time_step      1
 dump_thermo    1000
 dump_position  3000
-run            3000000
+run            {run_steps}
