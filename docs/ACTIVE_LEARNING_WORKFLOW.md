@@ -564,6 +564,8 @@ sampling:
   gpumd_dir: /path/to/GPUMD/src
   potential: nep89_20250409.txt
   temperatures: [300, 600, 900]
+  run_steps: 3000000
+  ensemble_mode: auto
   run_in: templates/gpumd/run.in
 ```
 
@@ -578,6 +580,26 @@ Heating ramp:
 ```yaml
 temperature: 300-1500
 ```
+
+GPUMD NPT ensemble mode:
+
+```yaml
+ensemble_mode: auto       # auto, orthogonal, triclinic, or 2d
+run_steps: 3000000
+```
+
+With `auto`, PESMaker chooses the `ensemble npt_scr` parameter shape for each
+input structure:
+
+- `orthogonal`: 3 pressures, 3 elastic constants, pressure coupling;
+- `triclinic`: 6 pressures, 6 elastic constants, pressure coupling;
+- `2d`: orthogonal form with a stiffer out-of-plane elastic constant.
+
+Default elastic constants are `[50, 50, 50]` for orthogonal boxes, six `50`
+values for triclinic boxes, and `[50, 50, 200]` for 2D slabs. 2D detection uses
+non-periodic directions when present and otherwise falls back to a vacuum
+heuristic. Set `ensemble_mode: 2d` explicitly when your 2D CIF keeps periodic
+boundary conditions along the vacuum direction.
 
 Expected output:
 

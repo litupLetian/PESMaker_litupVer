@@ -36,12 +36,21 @@ from pesmaker.structures import load_structure, write_structure
 DEFAULT_GPUMD_RUN_IN = """potential      nep89_20250409.txt
 velocity       300
 
-ensemble       npt_scr 300 300 100 0 0 0 20 20 100 1000
+ensemble       npt_scr 300 300 100 0 0 0 50 50 50 1000
 time_step      1
 dump_thermo    1000
 dump_position  3000
-run            3000000
+run            {run_steps}
 """
+
+DEFAULT_GPUMD_RUN_STEPS = 3000000
+DEFAULT_GPUMD_TEMP_COUPLING = 100.0
+DEFAULT_GPUMD_PRESSURE_COUPLING = 1000.0
+DEFAULT_GPUMD_ORTHOGONAL_ELASTIC = (50.0, 50.0, 50.0)
+DEFAULT_GPUMD_2D_ELASTIC = (50.0, 50.0, 200.0)
+DEFAULT_GPUMD_TRICLINIC_ELASTIC = (50.0, 50.0, 50.0, 50.0, 50.0, 50.0)
+DEFAULT_2D_VACUUM_THRESHOLD = 10.0
+DEFAULT_2D_VACUUM_RATIO = 1.0
 
 DEFAULT_INCAR = """SYSTEM = PESMaker single point
 GGA = PE         # Use the PBE functional for exchange-correlation
@@ -308,6 +317,7 @@ def setup_sampling(config: PESMakerConfig) -> StageResult:
                     config.sampling.options,
                     run_template,
                     condition,
+                    atoms,
                     potential_name=potential_name,
                 )
                 run_in_path.write_text(run_in, encoding="utf-8")
@@ -992,6 +1002,13 @@ def _sampling_conditions(options: dict[str, Any]) -> tuple[SamplingCondition, ..
             return (_ramp_temperature(start, end),)
         if not isinstance(temperatures, list) or not temperatures:
             raise ValueError("sampling.temperatures must be a non-empty list")
+        if (
+            len(temperatures) == 1
+            and isinstance(temperatures[0], str)
+            and "-" in temperatures[0]
+        ):
+            start, end = _parse_temperature_range(temperatures[0])
+            return (_ramp_temperature(start, end),)
         return tuple(_constant_temperature(float(value)) for value in temperatures)
 
     temperature = options.get("temperature", options.get("temp", 300))
@@ -1037,12 +1054,17 @@ def _render_sampling_run_in(
     options: dict[str, Any],
     template: str,
     condition: SamplingCondition,
+    atoms,
     *,
     potential_name: str | None = None,
 ) -> str:
     potential = potential_name or str(options.get("potential", "nep89_20250409.txt"))
+    ensemble = _sampling_ensemble_line(options, condition, atoms)
+    run_steps = _sampling_run_steps(options)
     rendered = template.format(
         potential=potential,
+        ensemble=ensemble,
+        run_steps=run_steps,
         temperature=_format_temperature(condition.start),
         temperature_start=_format_temperature(condition.start),
         temperature_end=_format_temperature(condition.end),
@@ -1053,7 +1075,152 @@ def _render_sampling_run_in(
         "velocity",
         f"velocity       {_format_temperature(condition.start)}",
     )
-    return _rewrite_gpumd_ensemble_temperature(rendered, condition)
+    rendered = _rewrite_gpumd_run_line(rendered, "ensemble", ensemble)
+    return _rewrite_gpumd_run_line(rendered, "run", f"run            {run_steps}")
+
+
+def _sampling_ensemble_line(
+    options: dict[str, Any],
+    condition: SamplingCondition,
+    atoms,
+) -> str:
+    mode = _sampling_ensemble_mode(options, atoms)
+    start = _format_temperature(condition.start)
+    end = _format_temperature(condition.end)
+    tau_t = _format_gpumd_number(
+        float(options.get("temperature_coupling", DEFAULT_GPUMD_TEMP_COUPLING))
+    )
+    tau_p = _format_gpumd_number(
+        float(options.get("pressure_coupling", DEFAULT_GPUMD_PRESSURE_COUPLING))
+    )
+
+    if mode == "triclinic":
+        pressures = _sampling_float_values(
+            options.get("pressure", options.get("pressures", 0.0)),
+            count=6,
+            default=(0.0, 0.0, 0.0, 0.0, 0.0, 0.0),
+            shear_default=0.0,
+        )
+        elastic = _sampling_float_values(
+            options.get("elastic_constants", options.get("elastic", None)),
+            count=6,
+            default=DEFAULT_GPUMD_TRICLINIC_ELASTIC,
+        )
+    else:
+        default_elastic = (
+            DEFAULT_GPUMD_2D_ELASTIC
+            if mode == "2d"
+            else DEFAULT_GPUMD_ORTHOGONAL_ELASTIC
+        )
+        pressures = _sampling_float_values(
+            options.get("pressure", options.get("pressures", 0.0)),
+            count=3,
+            default=(0.0, 0.0, 0.0),
+        )
+        elastic = _sampling_float_values(
+            options.get("elastic_constants", options.get("elastic", None)),
+            count=3,
+            default=default_elastic,
+        )
+
+    values = [start, end, tau_t, *map(_format_gpumd_number, pressures)]
+    values.extend(map(_format_gpumd_number, elastic))
+    values.append(tau_p)
+    return "ensemble       npt_scr " + " ".join(values)
+
+
+def _sampling_ensemble_mode(options: dict[str, Any], atoms) -> str:
+    raw_mode = str(
+        options.get("ensemble_mode", options.get("cell_mode", "auto"))
+    ).lower()
+    aliases = {
+        "auto": "auto",
+        "orthogonal": "orthogonal",
+        "orthorhombic": "orthogonal",
+        "ortho": "orthogonal",
+        "triclinic": "triclinic",
+        "tri": "triclinic",
+        "2d": "2d",
+        "slab": "2d",
+        "surface": "2d",
+    }
+    if raw_mode not in aliases:
+        raise ValueError(
+            "sampling.ensemble_mode must be one of: auto, orthogonal, "
+            "triclinic, 2d"
+        )
+    mode = aliases[raw_mode]
+    if mode != "auto":
+        return mode
+    if _is_two_dimensional_sampling_cell(options, atoms):
+        return "2d"
+    if _is_orthogonal_cell(atoms):
+        return "orthogonal"
+    return "triclinic"
+
+
+def _sampling_float_values(
+    value: Any,
+    *,
+    count: int,
+    default: tuple[float, ...],
+    shear_default: float | None = None,
+) -> tuple[float, ...]:
+    if value is None:
+        return default
+    if isinstance(value, (int, float, str)):
+        return tuple(float(value) for _ in range(count))
+    if not isinstance(value, list):
+        raise ValueError("sampling pressure and elastic options must be scalars or lists")
+    values = tuple(float(item) for item in value)
+    if len(values) == count:
+        return values
+    if count == 6 and len(values) == 3:
+        fill = 0.0 if shear_default is None else shear_default
+        return (*values, fill, fill, fill)
+    raise ValueError(f"sampling option must contain {count} value(s)")
+
+
+def _sampling_run_steps(options: dict[str, Any]) -> int:
+    value = int(options.get("run_steps", options.get("steps", DEFAULT_GPUMD_RUN_STEPS)))
+    if value < 1:
+        raise ValueError("sampling.run_steps must be a positive integer")
+    return value
+
+
+def _is_orthogonal_cell(atoms) -> bool:
+    cell = np.asarray(atoms.cell.array, dtype=float)
+    metric = cell @ cell.T
+    off_diagonal = metric[~np.eye(3, dtype=bool)]
+    lengths = np.linalg.norm(cell, axis=1)
+    scale = max(float(np.max(lengths) ** 2), 1.0)
+    return bool(np.all(np.abs(off_diagonal) <= 1e-8 * scale))
+
+
+def _is_two_dimensional_sampling_cell(options: dict[str, Any], atoms) -> bool:
+    pbc = np.asarray(atoms.pbc, dtype=bool)
+    if pbc.shape == (3,) and not bool(np.all(pbc)):
+        return True
+
+    if len(atoms) == 0:
+        return False
+    threshold = float(
+        options.get("two_dimensional_vacuum_threshold", DEFAULT_2D_VACUUM_THRESHOLD)
+    )
+    ratio = float(options.get("two_dimensional_vacuum_ratio", DEFAULT_2D_VACUUM_RATIO))
+    cell = np.asarray(atoms.cell.array, dtype=float)
+    positions = np.asarray(atoms.get_positions(), dtype=float)
+    for axis_vector in cell:
+        length = float(np.linalg.norm(axis_vector))
+        if length <= 0.0:
+            continue
+        axis_unit = axis_vector / length
+        projections = positions @ axis_unit
+        span = float(np.max(projections) - np.min(projections))
+        vacuum = max(length - span, 0.0)
+        if vacuum >= threshold and (span <= 0.0 or vacuum >= ratio * span):
+            return True
+    return False
 
 
 def _prepare_sampling_potential(
@@ -1083,31 +1250,11 @@ def _rewrite_gpumd_run_line(text: str, keyword: str, replacement: str) -> str:
     return "\n".join(output) + "\n"
 
 
-def _rewrite_gpumd_ensemble_temperature(
-    text: str,
-    condition: SamplingCondition,
-) -> str:
-    output = []
-    start = _format_temperature(condition.start)
-    end = _format_temperature(condition.end)
-    for line in text.splitlines():
-        tokens = line.split()
-        if len(tokens) >= 4 and tokens[0] == "ensemble":
-            tokens[2] = start
-            tokens[3] = end
-            output.append(_format_gpumd_tokens(tokens))
-        else:
-            output.append(line)
-    return "\n".join(output) + "\n"
-
-
-def _format_gpumd_tokens(tokens: list[str]) -> str:
-    if len(tokens) < 2:
-        return " ".join(tokens)
-    return f"{tokens[0]:<14} {tokens[1]} " + " ".join(tokens[2:])
-
-
 def _format_temperature(value: float) -> str:
+    return str(int(value)) if float(value).is_integer() else f"{value:g}"
+
+
+def _format_gpumd_number(value: float) -> str:
     return str(int(value)) if float(value).is_integer() else f"{value:g}"
 
 

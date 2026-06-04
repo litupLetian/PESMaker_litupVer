@@ -1063,7 +1063,7 @@ sampling:
   engine: gpumd
   output_dir: {(tmp_path / 'sampling').as_posix()}
   potential: nep89_20250409.txt
-  temperature: 300-1500
+  temperatures: [300-1500]
 """,
         encoding="utf-8",
     )
@@ -1074,6 +1074,127 @@ sampling:
     run_in = (workdir / "run.in").read_text(encoding="utf-8")
     assert "velocity       300" in run_in
     assert "ensemble       npt_scr 300 1500" in run_in
+
+
+def test_sampling_setup_selects_gpumd_ensemble_by_cell_shape(tmp_path):
+    """GPUMD run.in generation should adapt NPT parameters to cell shape."""
+    from ase import Atoms
+    from ase.io import write
+
+    structures = [
+        Atoms(
+            "Te2",
+            positions=[(0.0, 0.0, 0.0), (2.0, 2.0, 2.0)],
+            cell=[3.0, 3.0, 3.0],
+            pbc=True,
+        ),
+        Atoms(
+            "Te2",
+            positions=[(0.0, 0.0, 0.0), (2.0, 2.0, 2.0)],
+            cell=[(3.0, 0.0, 0.0), (1.0, 3.0, 0.0), (0.0, 0.0, 3.0)],
+            pbc=True,
+        ),
+        Atoms(
+            "Te2",
+            positions=[(0.0, 0.0, 10.0), (1.0, 1.0, 11.0)],
+            cell=[5.0, 5.0, 40.0],
+            pbc=[True, True, False],
+        ),
+    ]
+    generated_dir = tmp_path / "generated"
+    generated_dir.mkdir()
+    manifest_lines = []
+    for index, atoms in enumerate(structures):
+        path = tmp_path / f"structure_{index}.xyz"
+        write(path, atoms, format="extxyz")
+        manifest_lines.append(json.dumps({"path": str(path)}))
+    (generated_dir / "manifest.jsonl").write_text(
+        "\n".join(manifest_lines) + "\n",
+        encoding="utf-8",
+    )
+    config_path = tmp_path / "pesmaker.yaml"
+    config_path.write_text(
+        f"""project: ensemble_modes
+generation:
+  output_dir: {generated_dir.as_posix()}
+sampling:
+  engine: gpumd
+  output_dir: {(tmp_path / 'sampling').as_posix()}
+  temperatures: [300]
+""",
+        encoding="utf-8",
+    )
+
+    assert main(["sample-setup", str(config_path)]) == 0
+
+    orthogonal = (
+        tmp_path / "sampling" / "md_000000_temp_300K" / "run.in"
+    ).read_text(encoding="utf-8")
+    triclinic = (
+        tmp_path / "sampling" / "md_000001_temp_300K" / "run.in"
+    ).read_text(encoding="utf-8")
+    two_dimensional = (
+        tmp_path / "sampling" / "md_000002_temp_300K" / "run.in"
+    ).read_text(encoding="utf-8")
+
+    assert "ensemble       npt_scr 300 300 100 0 0 0 50 50 50 1000" in orthogonal
+    assert (
+        "ensemble       npt_scr 300 300 100 0 0 0 0 0 0 "
+        "50 50 50 50 50 50 1000"
+    ) in triclinic
+    assert (
+        "ensemble       npt_scr 300 300 100 0 0 0 50 50 200 1000"
+        in two_dimensional
+    )
+
+
+def test_sampling_setup_respects_run_steps_and_forced_gpumd_cell_mode(tmp_path):
+    """Users can force the GPUMD NPT cell mode and total MD step count."""
+    from ase import Atoms
+    from ase.io import write
+
+    structure_path = tmp_path / "structure.xyz"
+    write(
+        structure_path,
+        Atoms(
+            "Te2",
+            positions=[(0.0, 0.0, 0.0), (2.0, 2.0, 2.0)],
+            cell=[3.0, 3.0, 3.0],
+            pbc=True,
+        ),
+        format="extxyz",
+    )
+    generated_dir = tmp_path / "generated"
+    generated_dir.mkdir()
+    (generated_dir / "manifest.jsonl").write_text(
+        json.dumps({"path": str(structure_path)}) + "\n",
+        encoding="utf-8",
+    )
+    config_path = tmp_path / "pesmaker.yaml"
+    config_path.write_text(
+        f"""project: forced_mode
+generation:
+  output_dir: {generated_dir.as_posix()}
+sampling:
+  engine: gpumd
+  output_dir: {(tmp_path / 'sampling').as_posix()}
+  temperature: 300
+  ensemble_mode: triclinic
+  run_steps: 12345
+""",
+        encoding="utf-8",
+    )
+
+    assert main(["sample-setup", str(config_path)]) == 0
+
+    run_in = (
+        tmp_path / "sampling" / "md_000000_temp_300K" / "run.in"
+    ).read_text(encoding="utf-8")
+    assert (
+        "ensemble       npt_scr 300 300 100 0 0 0 0 0 0 "
+        "50 50 50 50 50 50 1000"
+    ) in run_in
+    assert "run            12345" in run_in
 
 
 def test_select_uses_farthest_point_sampling(tmp_path, monkeypatch):
