@@ -102,10 +102,16 @@ YAML sections and existing artifacts. For example, a config with
 trajectories, select frames, then continue to SCF and training if those
 sections are configured.
 
+If the YAML only contains structure generation settings, `next` generates the
+structures and stops. It writes `run.next.yaml` as a simple VASP SCF template;
+edit the INCAR, POTCAR, VASP, and submit-script paths there, then run
+`pesmaker next run.next.yaml`.
+
 `next` never submits jobs for real. At a sampling, SCF, or training submit
 boundary it writes a dry-run log, records the gate in
 `.pesmaker/<project>/next_state.json`, and prints the command to submit
-manually.
+manually. The printed line names the stage, for example `Submit SCF jobs` or
+`Submit GPUMD sampling jobs`.
 
 Manual direct generation and DFT labeling:
 

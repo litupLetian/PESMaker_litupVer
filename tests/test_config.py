@@ -322,6 +322,33 @@ def test_structures_accept_simple_path_list():
     ]
 
 
+def test_config_tracks_optional_workflow_sections():
+    """Smart-next should know whether optional workflow sections were written."""
+    generation_only = PESMakerConfig.from_mapping(
+        {
+            "project": "demo",
+            "structures": ["POSCAR"],
+        }
+    )
+    full = PESMakerConfig.from_mapping(
+        {
+            "project": "demo",
+            "structures": ["POSCAR"],
+            "sampling": {"engine": "gpumd"},
+            "labeling": {"engine": "vasp"},
+            "training": {"model": "nep", "output_dir": "training"},
+        }
+    )
+
+    assert generation_only.sampling_configured is False
+    assert generation_only.labeling_configured is False
+    assert generation_only.training_configured is False
+    assert generation_only.labeling.engine == "vasp"
+    assert full.sampling_configured is True
+    assert full.labeling_configured is True
+    assert full.training_configured is True
+
+
 def test_structures_accept_include_patterns(tmp_path, monkeypatch):
     """Users can collect many structures with an `include` glob pattern.
 
