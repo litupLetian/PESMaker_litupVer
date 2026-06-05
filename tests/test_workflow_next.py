@@ -55,19 +55,23 @@ jobs:
     state_path = tmp_path / ".pesmaker" / "direct_next" / "next_state.json"
     state = json.loads(state_path.read_text(encoding="utf-8"))
     assert "scf" in state["dry_runs"]
-    assert "Plan before execution" in output
-    assert "Start with       : Generate structures from the configured inputs." in output
-    assert "Submit behavior  : dry-run only" in output
-    assert output.index("Plan before execution") < output.index("Work done this run:")
-    assert "Inferred flow    : generate -> scf -> collect" in output
-    assert "Submission preview complete." in output
+    assert "PESMaker v" in output
+    assert "Work done:" in output
+    assert "Structure generation complete." in output
+    assert "Prepared 1 SCF job(s)" in output
+    assert "Plan before execution" not in output
+    assert "Inferred flow" not in output
     assert "Submit SCF jobs" in output
     assert f"pesmaker submit {config_path}" in output
     assert "pesmaker generate" not in output
 
-    assert main(["next", str(config_path)]) == 0
+    assert main(["next", str(config_path), "--verbose"]) == 0
     output = capsys.readouterr().out
     assert "Plan before execution" in output
+    assert "Inferred flow    : generate -> scf -> collect" in output
+    assert "Smart next" in output
+    assert "Status           : waiting" in output
+    assert "State            :" in output
     assert "No local stage will run now." in output
     assert "Waiting for SCF outputs matching" in output
     assert "Submission preview complete." not in output
@@ -114,16 +118,17 @@ jobs:
     state_path = tmp_path / ".pesmaker" / "sampling_next" / "next_state.json"
     state = json.loads(state_path.read_text(encoding="utf-8"))
     assert "sampling" in state["dry_runs"]
-    assert "Plan before execution" in output
-    assert "Submit behavior  : dry-run only" in output
-    assert "Inferred flow    : generate -> sampling -> select -> scf -> collect" in output
+    assert "Work done:" in output
+    assert "Plan before execution" not in output
+    assert "Inferred flow" not in output
     assert "Submit GPUMD sampling jobs" in output
     assert "pesmaker submit" in output
     assert "--stage sampling" in output
 
     assert main(["next", str(config_path)]) == 0
     output = capsys.readouterr().out
-    assert "Waiting for sampling trajectories matching sampling/**/movie.xyz" in output
+    assert "Waiting:" in output
+    assert "GPUMD movie.xyz files are not ready." in output
     assert "--stage sampling" in output
 
     from ase import Atoms
@@ -182,11 +187,12 @@ generation:
     assert followup.exists()
     assert not (tmp_path / "labeling" / "labeling_manifest.jsonl").exists()
     assert not (tmp_path / ".pesmaker").exists()
-    assert "Inferred flow    : generate -> config-needed" in output
-    assert "More settings are needed before SCF setup." in output
+    assert "Work done:" in output
+    assert "Plan before execution" not in output
+    assert "Inferred flow" not in output
     assert f"Template written : {followup}" in output
-    assert f"pesmaker validate {followup}" in output
-    assert f"pesmaker next {followup}" in output
+    assert f"Run: pesmaker validate {followup}" in output
+    assert f"Run: pesmaker next {followup}" in output
     assert "dataset_path" not in followup_text
     assert "input_dir: generated" in followup_text
     assert "output_dir: run_vasp_scf" in followup_text
@@ -315,8 +321,8 @@ jobs:
     assert (tmp_path / "training" / "submit.sh").exists()
     assert "Collected finished SCF outputs." in output
     assert "Prepared training inputs." in output
-    assert "Plan before execution" in output
-    assert "Stage            : training" in output
+    assert "Plan before execution" not in output
+    assert "Stage            : training" not in output
     assert "Submit training jobs" in output
     assert f"pesmaker submit {config_path} --stage training" in output
 
@@ -340,9 +346,9 @@ labeling:
     assert main(["next", str(config_path)]) == 0
     output = capsys.readouterr().out
 
-    assert "Plan before execution" in output
-    assert "No PESMaker task needs to run now." in output
-    assert "Complete          : No further PESMaker action is required" in output
+    assert "Plan before execution" not in output
+    assert "Complete:" in output
+    assert "No local PESMaker task needs to run now." in output
     assert not (tmp_path / ".pesmaker").exists()
 
 

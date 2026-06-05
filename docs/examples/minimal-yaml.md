@@ -165,7 +165,7 @@ pesmaker validate run.yaml
 pesmaker next run.yaml
 ```
 
-Then follow the `What you should do next` block printed by `next`.
+Then follow the `Next` block printed by `next`.
 
 ## SCF Setup From Existing Structures
 

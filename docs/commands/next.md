@@ -14,6 +14,8 @@ pesmaker next run.yaml
 ```
 
 Run `next` again whenever the jobs it asked you to submit have finished.
+Use `pesmaker next run.yaml --verbose` only when you want detailed flow
+diagnostics.
 
 ## Do I Still Need `generate`?
 
@@ -36,46 +38,43 @@ action. `next` only previews submissions and prints the command.
 
 ## What It Prints
 
-`next` prints a plan before it writes files:
+`next` normally prints only what happened and what to do next:
 
 ```text
-Plan before execution
-Start with       : Generate structures from the configured inputs.
-Then             : continue through any later local PESMaker stages whose inputs are ready
-Stop rule        : stop before real scheduler submission, or when external outputs are missing
-Submit behavior  : dry-run only; PESMaker will print the submit command
+PESMaker v0.1.0
+
+Work done:
+  - Structure generation complete.
+
+Next:
+  1. Edit run.next.yaml and set INCAR, POTCAR, VASP, and submit script paths.
+  2. Run: pesmaker validate run.next.yaml
+  3. Run: pesmaker next run.next.yaml
 ```
 
-After the run, it prints what actually happened:
+If `next` needs external files, it prints a short waiting message:
 
 ```text
-Work done this run:
+Waiting:
+  - SCF OUTCAR files are not ready.
+
+Next:
+  1. If not submitted yet: pesmaker submit run.yaml
+  2. After jobs finish: pesmaker next run.yaml
 ```
 
-These are the local stages that PESMaker already ran.
+For detailed flow/status/state output, run:
 
-```text
-Stopped because:
+```bash
+pesmaker status run.yaml
+pesmaker next run.yaml --verbose
 ```
-
-This tells you why it stopped. The usual reasons are:
-
-- more settings are needed before SCF setup;
-- a submit preview was written;
-- PESMaker is waiting for `movie.xyz`;
-- PESMaker is waiting for `OUTCAR`;
-- the workflow is complete.
-
-```text
-What you should do next:
-```
-
-This is the important part. Run the command printed there.
 
 If no task exists, `next` says:
 
 ```text
-No PESMaker task needs to run now.
+Complete:
+  - No local PESMaker task needs to run now.
 ```
 
 and exits without writing `.pesmaker/` state.
@@ -113,14 +112,14 @@ jobs:
 Then it prints:
 
 ```text
-Stopped because:
-More settings are needed before SCF setup.
+PESMaker v0.1.0
+
 Template written : run.next.yaml
 
-What you should do next:
+Next:
   1. Edit run.next.yaml and set INCAR, POTCAR, VASP, and submit script paths.
-  2. Check it: pesmaker validate run.next.yaml
-  3. Continue: pesmaker next run.next.yaml
+  2. Run: pesmaker validate run.next.yaml
+  3. Run: pesmaker next run.next.yaml
 ```
 
 If `run.next.yaml` already exists, PESMaker does not overwrite it.
@@ -133,13 +132,12 @@ With `generation` and `labeling` sections, the first `next` run will usually:
 generate -> scf-setup -> submit --dry-run
 ```
 
-Before doing that work, it prints the plan. Then it executes the local stages
-and stops at the SCF submission preview.
+It executes the local stages and stops at the SCF submission preview.
 
 Then it prints something like:
 
 ```text
-What you should do next:
+Next:
   1. Review the dry-run log: labeling/scf_submitted_jobs.txt
   2. Submit SCF jobs: pesmaker submit run.yaml
   3. After those jobs finish, run: pesmaker next run.yaml
@@ -164,8 +162,7 @@ will usually:
 generate -> sample-setup -> submit --stage sampling --dry-run
 ```
 
-Before doing that work, it prints the plan. Then it executes the local stages
-and stops at the sampling submission preview.
+It executes the local stages and stops at the sampling submission preview.
 
 Then it prints:
 

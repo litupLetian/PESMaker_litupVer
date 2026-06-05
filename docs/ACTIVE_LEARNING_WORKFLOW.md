@@ -14,15 +14,15 @@ pesmaker validate run.yaml
 pesmaker next run.yaml
 ```
 
-Then follow the `What you should do next` block printed by `next`.
+Then follow the `Next` block printed by `next`.
 
 You normally do not run every stage command by hand. `next` runs local PESMaker
 stages for you and stops only when an external scheduler job must be submitted
 or finished.
 
-Before `next` writes files, it prints `Plan before execution`. This tells you
-the first local step it will start with, that it will continue through later
-ready local stages, and that it will stop before real scheduler submission.
+By default, `next` prints only what it did and what you should do next. Use
+`pesmaker status run.yaml` or `pesmaker next run.yaml --verbose` when you want
+to inspect the detailed flow decision.
 
 ## What `next` Does
 

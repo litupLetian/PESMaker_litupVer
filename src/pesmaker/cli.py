@@ -21,7 +21,13 @@ import argparse
 import sys
 from pathlib import Path
 
-from pesmaker import __contact__, __version__
+from pesmaker import __version__
+from pesmaker.cli_next import (
+    print_next_concise,
+    print_next_status,
+    print_next_verbose,
+    submit_action_label,
+)
 from pesmaker.config.io import load_config
 from pesmaker.dataset.extxyz import collect_labeled_dataset
 from pesmaker.generators.structures import (
@@ -35,7 +41,7 @@ from pesmaker.results import StageResult
 from pesmaker.samplers.gpumd import setup_sampling
 from pesmaker.samplers.selection import select_sampling_frames
 from pesmaker.trainers.nep import setup_training
-from pesmaker.workflow.next import NextResult, inspect_next, run_next
+from pesmaker.workflow.next import inspect_next, run_next
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -72,6 +78,11 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     _add_config_argument(next_parser)
+    next_parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Show detailed flow diagnostics before and after running.",
+    )
 
     status_parser = subparsers.add_parser(
         "status",
@@ -176,15 +187,21 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         if args.command == "next":
-            preflight = inspect_next(config, args.config)
-            _print_next_preflight(preflight, config_path=args.config)
-            _print_next_result(run_next(config, args.config), config_path=args.config)
+            if args.verbose:
+                preflight = inspect_next(config, args.config)
+                print_next_verbose(
+                    preflight,
+                    run_next(config, args.config),
+                    config_path=args.config,
+                )
+            else:
+                print_next_concise(
+                    run_next(config, args.config), config_path=args.config
+                )
             return 0
 
         if args.command == "status":
-            _print_next_result(
-                inspect_next(config, args.config), config_path=args.config
-            )
+            print_next_status(inspect_next(config, args.config), config_path=args.config)
             return 0
 
         if args.command == "sample-setup":
@@ -437,7 +454,7 @@ def _print_submit_result(
     if dry_run:
         print("Next steps:")
         print(f"  - Review commands in {log_path}")
-        print(f"  - {_submit_action_label(stage)}: {_submit_command(config_path, stage)}")
+        print(f"  - {submit_action_label(stage)}: {_submit_command(config_path, stage)}")
     else:
         print("Next steps:")
         print("  - Check queue: squeue")
@@ -452,201 +469,11 @@ def _print_submit_result(
     print()
 
 
-def _print_next_result(result: NextResult, *, config_path: Path) -> None:
-    """Print a concise summary for `pesmaker next`."""
-    print("Smart next")
-    print(f"Inferred flow    : {result.flow}")
-    print(f"Status           : {result.status}")
-    if result.state_path is not None:
-        print(f"State            : {result.state_path}")
-    print()
-
-    run_events = [event for event in result.events if event.kind == "run"]
-    boundary_events = [event for event in result.events if event.kind != "run"]
-
-    if run_events:
-        print("Work done this run:")
-        for event in run_events:
-            print(f"  - {event.message}")
-            if event.result is not None:
-                print(f"    Output: {event.result.output_dir}")
-        print()
-
-    if not boundary_events:
-        print("What you should do next:")
-        print(f"  - Run again to continue: pesmaker next {config_path}")
-        print()
-        return
-
-    if all(event.kind.startswith("next-action") for event in boundary_events):
-        for event in boundary_events:
-            print(f"Next action      : {event.message}")
-            print()
-            print("What you should do next:")
-            print(f"  - Run: pesmaker next {config_path}")
-            if _next_action_kind(event) == "config-needed" and event.template_path:
-                print(f"  - Edit the generated template: {event.template_path}")
-            elif event.command:
-                print(f"  - {_submit_action_label(_event_stage(event))}: {event.command}")
-            print()
-        return
-
-    print("Manual stage commands are optional. `next` already runs local PESMaker")
-    print("stages such as generate, sample-setup, select, scf-setup, collect, and")
-    print("train-setup whenever their inputs are ready.")
-    print()
-
-    print("Stopped because:")
-    for event in result.events:
-        if event.kind == "run":
-            continue
-        if event.kind == "submit-preview":
-            if event.log_path is None:
-                print("  - A submission preview is the next required step.")
-            else:
-                print("Submission preview complete.")
-            stage = _event_stage(event)
-            print(f"Stage            : {stage}")
-            if event.log_path is not None:
-                print(f"Dry-run log      : {event.log_path}")
-            print()
-            print("What you should do next:")
-            if event.log_path is not None:
-                print(f"  1. Review the dry-run log: {event.log_path}")
-            if event.command:
-                print(f"  2. {_submit_action_label(stage)}: {event.command}")
-            print(f"  3. After those jobs finish, run: pesmaker next {config_path}")
-            print(f"{_submit_action_label(stage):<25}: {event.command}")
-            continue
-        if event.kind == "config-needed":
-            template_path = event.template_path or config_path.with_name(
-                f"{config_path.stem}.next{config_path.suffix or '.yaml'}"
-            )
-            print(event.message)
-            if event.template_created:
-                print(f"Template written : {template_path}")
-            else:
-                print(f"Template exists  : {template_path}")
-            print()
-            print("What you should do next:")
-            print(
-                f"  1. Edit {template_path} and set INCAR, POTCAR, VASP, "
-                "and submit script paths."
-            )
-            print(f"  2. Check it: pesmaker validate {template_path}")
-            print(f"  3. Continue: pesmaker next {template_path}")
-            continue
-        if event.kind in {"wait", "waiting"}:
-            print("  - PESMaker is waiting for external job outputs.")
-            print(f"Waiting for       : {event.message}")
-            print()
-            print("What you should do next:")
-            stage = _event_stage(event)
-            if event.command:
-                print(
-                    f"  1. If the jobs were not submitted yet, run: "
-                    f"{event.command}"
-                )
-                print("  2. Wait for the scheduler jobs to finish.")
-                print(f"  3. Run again: pesmaker next {config_path}")
-                print(f"{_submit_action_label(stage):<25}: {event.command}")
-            else:
-                print("  1. Wait until the required files exist.")
-                print(f"  2. Run again: pesmaker next {config_path}")
-            continue
-        if event.kind == "complete":
-            print(f"Complete          : {event.message}")
-            print()
-            print("What you should do next:")
-            print("  - Inspect the generated outputs and archive this run if needed.")
-        else:
-            print(f"Next action      : {event.message}")
-            print()
-            print("What you should do next:")
-            print(f"  - Run: pesmaker next {config_path}")
-        if event.result is not None:
-            print(f"Output directory : {event.result.output_dir}")
-        print()
-
-
-def _print_next_preflight(result: NextResult, *, config_path: Path) -> None:
-    """Print the action plan before `pesmaker next` writes files."""
-    event = result.events[0] if result.events else None
-    step_kind = _next_action_kind(event)
-    print("Plan before execution")
-    print(f"Inferred flow    : {result.flow}")
-    print()
-
-    if event is None:
-        print("PESMaker did not find a next action.")
-        print()
-        return
-
-    if step_kind == "run":
-        print(f"Start with       : {event.message}")
-        print(
-            "Then             : continue through any later local PESMaker "
-            "stages whose inputs are ready"
-        )
-        print(
-            "Stop rule        : stop before real scheduler submission, or "
-            "when external outputs are missing"
-        )
-        print("Submit behavior  : dry-run only; PESMaker will print the submit command")
-    elif step_kind == "submit-preview":
-        print(f"Start with       : {event.message}")
-        print("Stop rule        : stop before real scheduler submission")
-        if event.command:
-            print(f"Submit command   : {event.command}")
-    elif step_kind == "waiting":
-        print("No local stage will run now.")
-        print(f"Waiting for      : {event.message}")
-        if event.command:
-            print(f"Submit command   : {event.command}")
-    elif step_kind == "config-needed":
-        print("Start with       : write a follow-up VASP SCF config template")
-        print("Stop rule        : wait for the user to edit the follow-up YAML")
-        if event.template_path is not None:
-            print(f"Template         : {event.template_path}")
-    elif step_kind == "complete":
-        print("No PESMaker task needs to run now.")
-        print(f"Reason           : {event.message}")
-    else:
-        print(f"Start with       : {event.message}")
-        print("Stop rule        : stop before real scheduler submission")
-    print()
-
-
-def _next_action_kind(event) -> str:
-    if event is None:
-        return ""
-    prefix = "next-action:"
-    if isinstance(event.kind, str) and event.kind.startswith(prefix):
-        return event.kind[len(prefix) :]
-    return str(event.kind)
-
-
-def _event_stage(event) -> str:
-    if event.command and "--stage sampling" in event.command:
-        return "sampling"
-    if event.command and "--stage training" in event.command:
-        return "training"
-    return "scf"
-
-
 def _submit_command(config_path: Path, stage: str) -> str:
     command = f"pesmaker submit {config_path}"
     if stage != "scf":
         command = f"{command} --stage {stage}"
     return command
-
-
-def _submit_action_label(stage: str) -> str:
-    if stage == "sampling":
-        return "Submit GPUMD sampling jobs"
-    if stage == "training":
-        return "Submit training jobs"
-    return "Submit SCF jobs"
 
 
 def _stage_job_count(message: str) -> int:
@@ -658,24 +485,6 @@ def _stage_job_count(message: str) -> int:
 
 
 def _print_banner() -> None:
-    """Print the PESMaker command banner with version and contact information.
-
-    The banner is shown once at the beginning of every executable subcommand so
-    users can identify the running PESMaker version in logs.
-    """
-    logo_lines = [
-        r"  _____   ______   _____   __  __          _                 ",
-        r" |  __ \ |  ____| / ____| |  \/  |        | |                ",
-        r" | |__) || |__   | (___   | \  / |   __ _ | | __  ___  _ __ ",
-        r" |  ___/ |  __|   \___ \  | |\/| |  / _` || |/ / / _ \| '__|",
-        r" | |     | |____  ____) | | |  | | | (_| ||   < |  __/| |   ",
-        r" |_|     |______||_____/  |_|  |_|  \__,_||_|\_\ \___||_|   ",
-        f"                                                   v-{__version__}",
-    ]
-    for line in logo_lines:
-        print(line)
-    print("**************** Potential Energy Surface Maker ****************")
-    print("***** Automated dataset generation for machine-learned potentials *****")
-    print(f"**************** Author: {__contact__} ****************")
-    print("****************************************************************")
+    """Print a short command banner."""
+    print(f"PESMaker v{__version__}")
     print()
