@@ -5,8 +5,8 @@
 It does not create structures or setup folders. Run setup first, or let
 [`next`](next.md) prepare the folders.
 
-`next` prints the correct submit command. New users can simply copy the line
-printed under `What you should do next`.
+`next` prints the correct submit command. New users can simply copy the command
+printed in the `Next` block.
 
 ## SCF Jobs
 

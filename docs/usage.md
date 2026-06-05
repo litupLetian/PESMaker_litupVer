@@ -41,16 +41,15 @@ If your YAML only has structure-generation settings, `next` generates the
 structures and writes `run.next.yaml`. Edit that follow-up file with VASP and
 submit paths, then run `pesmaker next run.next.yaml`.
 
-Before it writes files, `next` prints `Plan before execution`. Read that block
-if you want to see what PESMaker is about to do. It still stops before any real
-cluster submission.
+By default, `next` prints only `Work done` and `Next`. It still stops before
+any real cluster submission.
 
 ## 4. Follow the Printed Next Step
 
 When jobs need to be submitted, `next` prints a block like:
 
 ```text
-What you should do next:
+Next:
   1. Review the dry-run log: labeling/scf_submitted_jobs.txt
   2. Submit SCF jobs: pesmaker submit run.yaml
   3. After those jobs finish, run: pesmaker next run.yaml
@@ -82,7 +81,8 @@ If you are unsure what will happen:
 pesmaker status run.yaml
 ```
 
-`status` is read-only.
+`status` is read-only. Use `pesmaker next run.yaml --verbose` for detailed
+diagnostics during an actual `next` run.
 
 ## Manual Mode
 
