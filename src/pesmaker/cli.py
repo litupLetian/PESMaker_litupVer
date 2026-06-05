@@ -405,7 +405,7 @@ def _print_labeling_result(result: StageResult, config_path: Path) -> None:
         "(INCAR, POSCAR, POTCAR, submit.sh)"
     )
     print(f"  - Preview submissions: pesmaker submit {config_path} --dry-run")
-    print(f"  - Submit jobs       : pesmaker submit {config_path}")
+    print(f"  - Submit SCF jobs   : pesmaker submit {config_path}")
     print()
 
 
@@ -437,7 +437,7 @@ def _print_submit_result(
     if dry_run:
         print("Next steps:")
         print(f"  - Review commands in {log_path}")
-        print(f"  - Submit jobs: {_submit_command(config_path, stage)}")
+        print(f"  - {_submit_action_label(stage)}: {_submit_command(config_path, stage)}")
     else:
         print("Next steps:")
         print("  - Check queue: squeue")
@@ -484,8 +484,10 @@ def _print_next_result(result: NextResult, *, config_path: Path) -> None:
             print()
             print("What you should do next:")
             print(f"  - Run: pesmaker next {config_path}")
-            if event.command:
-                print(f"  - Related submit command: {event.command}")
+            if _next_action_kind(event) == "config-needed" and event.template_path:
+                print(f"  - Edit the generated template: {event.template_path}")
+            elif event.command:
+                print(f"  - {_submit_action_label(_event_stage(event))}: {event.command}")
             print()
         return
 
@@ -512,20 +514,42 @@ def _print_next_result(result: NextResult, *, config_path: Path) -> None:
             if event.log_path is not None:
                 print(f"  1. Review the dry-run log: {event.log_path}")
             if event.command:
-                print(f"  2. Submit the prepared jobs: {event.command}")
+                print(f"  2. {_submit_action_label(stage)}: {event.command}")
             print(f"  3. After those jobs finish, run: pesmaker next {config_path}")
-            print(f"Submit jobs      : {event.command}")
+            print(f"{_submit_action_label(stage):<25}: {event.command}")
+            continue
+        if event.kind == "config-needed":
+            template_path = event.template_path or config_path.with_name(
+                f"{config_path.stem}.next{config_path.suffix or '.yaml'}"
+            )
+            print(event.message)
+            if event.template_created:
+                print(f"Template written : {template_path}")
+            else:
+                print(f"Template exists  : {template_path}")
+            print()
+            print("What you should do next:")
+            print(
+                f"  1. Edit {template_path} and set INCAR, POTCAR, VASP, "
+                "and submit script paths."
+            )
+            print(f"  2. Check it: pesmaker validate {template_path}")
+            print(f"  3. Continue: pesmaker next {template_path}")
             continue
         if event.kind in {"wait", "waiting"}:
             print("  - PESMaker is waiting for external job outputs.")
             print(f"Waiting for       : {event.message}")
             print()
             print("What you should do next:")
+            stage = _event_stage(event)
             if event.command:
-                print(f"  1. If the jobs were not submitted yet, run: {event.command}")
+                print(
+                    f"  1. If the jobs were not submitted yet, run: "
+                    f"{event.command}"
+                )
                 print("  2. Wait for the scheduler jobs to finish.")
                 print(f"  3. Run again: pesmaker next {config_path}")
-                print(f"Submit jobs      : {event.command}")
+                print(f"{_submit_action_label(stage):<25}: {event.command}")
             else:
                 print("  1. Wait until the required files exist.")
                 print(f"  2. Run again: pesmaker next {config_path}")
@@ -579,6 +603,11 @@ def _print_next_preflight(result: NextResult, *, config_path: Path) -> None:
         print(f"Waiting for      : {event.message}")
         if event.command:
             print(f"Submit command   : {event.command}")
+    elif step_kind == "config-needed":
+        print("Start with       : write a follow-up VASP SCF config template")
+        print("Stop rule        : wait for the user to edit the follow-up YAML")
+        if event.template_path is not None:
+            print(f"Template         : {event.template_path}")
     elif step_kind == "complete":
         print("No PESMaker task needs to run now.")
         print(f"Reason           : {event.message}")
@@ -610,6 +639,14 @@ def _submit_command(config_path: Path, stage: str) -> str:
     if stage != "scf":
         command = f"{command} --stage {stage}"
     return command
+
+
+def _submit_action_label(stage: str) -> str:
+    if stage == "sampling":
+        return "Submit GPUMD sampling jobs"
+    if stage == "training":
+        return "Submit training jobs"
+    return "Submit SCF jobs"
 
 
 def _stage_job_count(message: str) -> int:

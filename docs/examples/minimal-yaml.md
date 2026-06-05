@@ -15,12 +15,13 @@ pesmaker next run.yaml
 Do not add a `workflow` field for ordinary runs. PESMaker infers the flow from
 the sections present in the YAML.
 
-## Generate Structures Only
+## Generate Structures First
 
-Use this when you only want generated structures.
+Use this when you first want to generate structures, then decide how to label
+them.
 
 ```yaml
-project: generate_only
+project: 2D_Te_defect
 
 structures:
   - POSCAR
@@ -34,7 +35,36 @@ Run:
 
 ```bash
 pesmaker validate run.yaml
-pesmaker generate run.yaml
+pesmaker next run.yaml
+```
+
+PESMaker generates `generated/` and writes `run.next.yaml`. Edit that file
+before running the next stage:
+
+```yaml
+project: 2D_Te_defect
+
+labeling:
+  engine: vasp
+  output_dir: run_vasp_scf
+  input_dir: generated
+  incar: /path/to/INCAR
+  potcar_library: /path/to/VASP/potentials
+  command: /path/to/vasp_std
+
+jobs:
+  submit_command: sbatch
+  cores_cpu: 36
+  vasp_kpar: 3
+  vasp_ncore: 6
+  sub_file: /path/to/sub.sh
+```
+
+Then continue:
+
+```bash
+pesmaker validate run.next.yaml
+pesmaker next run.next.yaml
 ```
 
 ## Generate Then VASP SCF

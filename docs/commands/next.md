@@ -60,6 +60,7 @@ Stopped because:
 
 This tells you why it stopped. The usual reasons are:
 
+- more settings are needed before SCF setup;
 - a submit preview was written;
 - PESMaker is waiting for `movie.xyz`;
 - PESMaker is waiting for `OUTCAR`;
@@ -79,6 +80,51 @@ No PESMaker task needs to run now.
 
 and exits without writing `.pesmaker/` state.
 
+## Generate-Only Example
+
+If your YAML only contains `structures` and `generation`, `next` generates the
+structures and stops. It does not guess your VASP, GPUMD, or submit settings.
+
+```text
+generate -> config-needed
+```
+
+After generation, PESMaker writes `run.next.yaml`:
+
+```yaml
+project: 2D_Te_defect
+
+labeling:
+  engine: vasp
+  output_dir: run_vasp_scf
+  input_dir: generated
+  incar: /path/to/INCAR
+  potcar_library: /path/to/VASP/potentials
+  command: /path/to/vasp_std
+
+jobs:
+  submit_command: sbatch
+  cores_cpu: 36
+  vasp_kpar: 3
+  vasp_ncore: 6
+  sub_file: /path/to/sub.sh
+```
+
+Then it prints:
+
+```text
+Stopped because:
+More settings are needed before SCF setup.
+Template written : run.next.yaml
+
+What you should do next:
+  1. Edit run.next.yaml and set INCAR, POTCAR, VASP, and submit script paths.
+  2. Check it: pesmaker validate run.next.yaml
+  3. Continue: pesmaker next run.next.yaml
+```
+
+If `run.next.yaml` already exists, PESMaker does not overwrite it.
+
 ## Direct SCF Example
 
 With `generation` and `labeling` sections, the first `next` run will usually:
@@ -95,7 +141,7 @@ Then it prints something like:
 ```text
 What you should do next:
   1. Review the dry-run log: labeling/scf_submitted_jobs.txt
-  2. Submit the prepared jobs: pesmaker submit run.yaml
+  2. Submit SCF jobs: pesmaker submit run.yaml
   3. After those jobs finish, run: pesmaker next run.yaml
 ```
 
@@ -123,8 +169,8 @@ and stops at the sampling submission preview.
 
 Then it prints:
 
-```bash
-pesmaker submit run.yaml --stage sampling
+```text
+Submit GPUMD sampling jobs: pesmaker submit run.yaml --stage sampling
 ```
 
 After GPUMD writes `movie.xyz`, run:

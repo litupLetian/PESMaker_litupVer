@@ -55,6 +55,7 @@ Stage data stays file-backed:
 - sampling jobs: `sampling/sampling_manifest.jsonl`;
 - selected frames: `selected/manifest.jsonl`;
 - SCF jobs: `labeling/labeling_manifest.jsonl`;
+- follow-up config template after generation-only runs: `run.next.yaml`;
 - smart-next dry-run gates: `.pesmaker/<project>/next_state.json`.
 
 A database service remains optional and is not required for the current

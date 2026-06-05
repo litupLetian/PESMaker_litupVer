@@ -35,6 +35,7 @@ Then it advances as far as it safely can.
 
 ```text
 No generated manifest -> generate structures
+Only generation configured -> write run.next.yaml and wait for settings
 Sampling configured   -> prepare GPUMD folders
 Need sampling jobs    -> write dry-run log and print submit command
 movie.xyz exists      -> select frames
@@ -46,6 +47,25 @@ Training configured   -> prepare training folder and print submit command
 If everything local is ready, one `next` run may perform several stages. If an
 external result is missing, `next` waits and tells you what file it needs.
 If no stage is needed, `next` reports that no PESMaker task needs to run now.
+
+## Generate First, Configure Later
+
+Use this when you only know the structure-generation settings now.
+
+YAML shape:
+
+```text
+structures
+generation
+```
+
+The first `next` run generates structures and writes `run.next.yaml`. Edit that
+file to set VASP and submit paths, then continue:
+
+```bash
+pesmaker validate run.next.yaml
+pesmaker next run.next.yaml
+```
 
 ## Direct SCF Flow
 
@@ -70,8 +90,8 @@ pesmaker next run.yaml
 The first `next` run usually generates structures, prepares SCF folders, and
 writes a dry-run submit log. It then prints:
 
-```bash
-pesmaker submit run.yaml
+```text
+Submit SCF jobs: pesmaker submit run.yaml
 ```
 
 After VASP finishes and `OUTCAR` files exist:
@@ -103,25 +123,27 @@ User loop:
 ```bash
 pesmaker validate run.yaml
 pesmaker next run.yaml
-pesmaker submit run.yaml --stage sampling
+# next prints: Submit GPUMD sampling jobs: pesmaker submit run.yaml --stage sampling
 ```
 
 After GPUMD writes `movie.xyz`:
 
 ```bash
 pesmaker next run.yaml
-pesmaker submit run.yaml
+# next prints: Submit SCF jobs: pesmaker submit run.yaml
 ```
 
 After VASP writes `OUTCAR`:
 
 ```bash
 pesmaker next run.yaml
-pesmaker submit run.yaml --stage training
+# next prints: Submit training jobs: pesmaker submit run.yaml --stage training
 ```
 
 You do not need to remember this full chain. `next` prints the correct submit
-command at each boundary.
+command and stage name at each boundary. `pesmaker submit run.yaml` remains a
+shortcut for SCF jobs; sampling and training use `--stage sampling` and
+`--stage training`.
 
 ## What If Everything Is Already Done?
 

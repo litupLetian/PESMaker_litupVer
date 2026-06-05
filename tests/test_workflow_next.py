@@ -61,7 +61,8 @@ jobs:
     assert output.index("Plan before execution") < output.index("Work done this run:")
     assert "Inferred flow    : generate -> scf -> collect" in output
     assert "Submission preview complete." in output
-    assert f"Submit jobs      : pesmaker submit {config_path}" in output
+    assert "Submit SCF jobs" in output
+    assert f"pesmaker submit {config_path}" in output
     assert "pesmaker generate" not in output
 
     assert main(["next", str(config_path)]) == 0
@@ -116,7 +117,8 @@ jobs:
     assert "Plan before execution" in output
     assert "Submit behavior  : dry-run only" in output
     assert "Inferred flow    : generate -> sampling -> select -> scf -> collect" in output
-    assert "Submit jobs      : pesmaker submit" in output
+    assert "Submit GPUMD sampling jobs" in output
+    assert "pesmaker submit" in output
     assert "--stage sampling" in output
 
     assert main(["next", str(config_path)]) == 0
@@ -148,7 +150,60 @@ jobs:
         .splitlines()
     ]
     assert all("selected" in record["source"] for record in records)
-    assert "Submit jobs      : pesmaker submit" in output
+    assert "Submit SCF jobs" in output
+    assert "pesmaker submit" in output
+
+
+def test_next_generation_only_writes_followup_scf_template(
+    tmp_path,
+    monkeypatch,
+    capsys,
+):
+    """Generation-only configs should stop and ask for follow-up SCF settings."""
+    structure = _write_structure(tmp_path)
+    config_path = tmp_path / "run.yaml"
+    config_path.write_text(
+        f"""project: generation_only
+structures:
+  - {structure.as_posix()}
+generation:
+  output_dir: generated
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+
+    assert main(["next", str(config_path)]) == 0
+    output = capsys.readouterr().out
+    followup = tmp_path / "run.next.yaml"
+    followup_text = followup.read_text(encoding="utf-8")
+
+    assert (tmp_path / "generated" / "manifest.jsonl").exists()
+    assert followup.exists()
+    assert not (tmp_path / "labeling" / "labeling_manifest.jsonl").exists()
+    assert not (tmp_path / ".pesmaker").exists()
+    assert "Inferred flow    : generate -> config-needed" in output
+    assert "More settings are needed before SCF setup." in output
+    assert f"Template written : {followup}" in output
+    assert f"pesmaker validate {followup}" in output
+    assert f"pesmaker next {followup}" in output
+    assert "dataset_path" not in followup_text
+    assert "input_dir: generated" in followup_text
+    assert "output_dir: run_vasp_scf" in followup_text
+    assert "vasp_kpar: 3" in followup_text
+    assert "vasp_ncore: 6" in followup_text
+
+    followup.write_text("custom: keep\n", encoding="utf-8")
+    assert main(["next", str(config_path)]) == 0
+    output = capsys.readouterr().out
+
+    assert followup.read_text(encoding="utf-8") == "custom: keep\n"
+    assert f"Template exists  : {followup}" in output
+
+    assert main(["status", str(config_path)]) == 0
+    output = capsys.readouterr().out
+    assert f"Edit the generated template: {followup}" in output
+    assert "Submit SCF jobs" not in output
 
 
 def test_status_reports_next_action_without_writing_files(tmp_path, monkeypatch, capsys):
@@ -262,7 +317,8 @@ jobs:
     assert "Prepared training inputs." in output
     assert "Plan before execution" in output
     assert "Stage            : training" in output
-    assert f"Submit jobs      : pesmaker submit {config_path} --stage training" in output
+    assert "Submit training jobs" in output
+    assert f"pesmaker submit {config_path} --stage training" in output
 
 
 def test_next_reports_complete_without_running_when_no_task_exists(

@@ -37,6 +37,10 @@ You do not need to run `generate`, `sample-setup`, `select`, `scf-setup`,
 `collect`, or `train-setup` one by one. `next` runs those local stages when
 their inputs are ready.
 
+If your YAML only has structure-generation settings, `next` generates the
+structures and writes `run.next.yaml`. Edit that follow-up file with VASP and
+submit paths, then run `pesmaker next run.next.yaml`.
+
 Before it writes files, `next` prints `Plan before execution`. Read that block
 if you want to see what PESMaker is about to do. It still stops before any real
 cluster submission.
@@ -48,7 +52,7 @@ When jobs need to be submitted, `next` prints a block like:
 ```text
 What you should do next:
   1. Review the dry-run log: labeling/scf_submitted_jobs.txt
-  2. Submit the prepared jobs: pesmaker submit run.yaml
+  2. Submit SCF jobs: pesmaker submit run.yaml
   3. After those jobs finish, run: pesmaker next run.yaml
 ```
 

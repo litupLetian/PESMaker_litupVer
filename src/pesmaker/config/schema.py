@@ -278,6 +278,9 @@ class PESMakerConfig:
         training: Potential training engine configuration.
         jobs: Cluster submission and machine-specific template options.
         workflow: Optional advanced smart-next override.
+        sampling_configured: Whether the user wrote a `sampling` section.
+        labeling_configured: Whether the user wrote a `labeling` section.
+        training_configured: Whether the user wrote a `training` section.
     """
 
     project: str
@@ -297,6 +300,9 @@ class PESMakerConfig:
         default_factory=lambda: EngineConfig(engine="local", options={})
     )
     workflow: WorkflowConfig = field(default_factory=WorkflowConfig)
+    sampling_configured: bool = False
+    labeling_configured: bool = False
+    training_configured: bool = False
 
     @classmethod
     def from_mapping(cls, data: dict[str, Any]) -> "PESMakerConfig":
@@ -321,6 +327,8 @@ class PESMakerConfig:
             "sampling",
             aliases=("MD_sampling", "md_sampling"),
         )
+        labeling = _optional_mapping(data.get("labeling"), "labeling")
+        training = _optional_mapping(data.get("training"), "training")
 
         return cls(
             project=str(project),
@@ -333,14 +341,14 @@ class PESMakerConfig:
                 default_engine="none",
             ),
             labeling=EngineConfig.from_mapping(
-                _optional_mapping(data.get("labeling"), "labeling"),
+                labeling,
                 default_engine="vasp",
             ),
             dataset=DatasetConfig.from_mapping(
                 _optional_mapping(data.get("dataset"), "dataset")
             ),
             training=EngineConfig.from_mapping(
-                _optional_mapping(data.get("training"), "training"),
+                training,
                 default_engine="nep",
                 alias_engine_key="model",
             ),
@@ -350,6 +358,9 @@ class PESMakerConfig:
                 alias_engine_key="machine",
             ),
             workflow=WorkflowConfig.from_value(data.get("workflow")),
+            sampling_configured=sampling is not None,
+            labeling_configured=labeling is not None,
+            training_configured=training is not None,
         )
 
 

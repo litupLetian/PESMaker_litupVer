@@ -59,6 +59,8 @@ class NextEvent:
     result: StageResult | None = None
     command: str | None = None
     log_path: Path | None = None
+    template_path: Path | None = None
+    template_created: bool = False
 
 
 @dataclass(frozen=True)
@@ -80,6 +82,7 @@ class NextStep:
     message: str
     stage: str | None = None
     command: str | None = None
+    template_path: Path | None = None
 
 
 def run_next(config: PESMakerConfig, config_path: Path) -> NextResult:
@@ -127,6 +130,19 @@ def run_next(config: PESMakerConfig, config_path: Path) -> NextResult:
             events.append(NextEvent(kind="run", message=result.message, result=result))
             continue
 
+        if step.action == "write_next_config" and step.template_path is not None:
+            created = _write_next_config_template(config, step.template_path)
+            events.append(
+                NextEvent(
+                    kind=step.kind,
+                    message=step.message,
+                    command=step.command,
+                    template_path=step.template_path,
+                    template_created=created,
+                )
+            )
+            return _result(config, step.kind, events)
+
         if step.action == "preview_submit" and step.stage:
             event = _preview_submit(config, config_path, state, stage=step.stage)
             events.append(event)
@@ -150,6 +166,7 @@ def inspect_next(config: PESMakerConfig, config_path: Path) -> NextResult:
         kind=f"next-action:{step.kind}",
         message=step.message,
         command=step.command,
+        template_path=step.template_path,
     )
     return _result(config, "status", [event])
 
@@ -165,6 +182,16 @@ def determine_next_step(
             action="generate",
             kind="run",
             message="Generate structures from the configured inputs.",
+        )
+
+    if _needs_next_config(config):
+        template_path = _next_config_template_path(config_path)
+        return NextStep(
+            action="write_next_config",
+            kind="config-needed",
+            message="More settings are needed before SCF setup.",
+            command=f"pesmaker next {template_path}",
+            template_path=template_path,
         )
 
     if _sampling_enabled(config):
@@ -274,6 +301,8 @@ def inferred_flow(config: PESMakerConfig) -> str:
         stages.extend(["scf", "collect"])
     if _training_enabled(config):
         stages.append("train")
+    if config.structures and len(stages) == 1:
+        stages.append("config-needed")
     return " -> ".join(stages) if stages else "inspect existing artifacts"
 
 
@@ -301,8 +330,20 @@ def _should_generate(config: PESMakerConfig) -> bool:
     return bool(config.structures) and not generated_manifest_path(config).exists()
 
 
+def _needs_next_config(config: PESMakerConfig) -> bool:
+    return (
+        bool(config.structures)
+        and generated_manifest_path(config).exists()
+        and not _sampling_enabled(config)
+        and not _labeling_enabled(config)
+        and not _training_enabled(config)
+    )
+
+
 def _sampling_enabled(config: PESMakerConfig) -> bool:
     if config.workflow.mode == "direct-scf":
+        return False
+    if not config.sampling_configured:
         return False
     return config.sampling.engine.strip().lower() not in {"", "none"}
 
@@ -312,16 +353,50 @@ def _selection_enabled(config: PESMakerConfig) -> bool:
 
 
 def _labeling_enabled(config: PESMakerConfig) -> bool:
+    if not config.labeling_configured:
+        return False
     return config.labeling.engine.strip().lower() not in {"", "none"}
 
 
 def _training_enabled(config: PESMakerConfig) -> bool:
     if config.workflow.mode == "direct-scf":
         return False
+    if not config.training_configured:
+        return False
     return (
         config.training.engine.strip().lower() not in {"", "none"}
         and bool(config.training.options)
     )
+
+
+def _next_config_template_path(config_path: Path) -> Path:
+    suffix = config_path.suffix or ".yaml"
+    return config_path.with_name(f"{config_path.stem}.next{suffix}")
+
+
+def _write_next_config_template(config: PESMakerConfig, path: Path) -> bool:
+    if path.exists():
+        return False
+    input_dir = generated_manifest_path(config).parent.as_posix()
+    text = f"""project: {config.project}
+
+labeling:
+  engine: vasp
+  output_dir: run_vasp_scf
+  input_dir: {input_dir}
+  incar: /path/to/INCAR
+  potcar_library: /path/to/VASP/potentials
+  command: /path/to/vasp_std
+
+jobs:
+  submit_command: sbatch
+  cores_cpu: 36
+  vasp_kpar: 3
+  vasp_ncore: 6
+  sub_file: /path/to/sub.sh
+"""
+    path.write_text(text, encoding="utf-8")
+    return True
 
 
 def _labeling_has_explicit_input(config: PESMakerConfig) -> bool:

@@ -958,7 +958,7 @@ jobs:
     assert f"Output directory : {tmp_path / 'labeling'}" in output
     assert f"Log              : {log}" in output
     assert f"Review commands in {log}" in output
-    assert f"Submit jobs: pesmaker submit {config_path}" in output
+    assert f"Submit SCF jobs: pesmaker submit {config_path}" in output
     assert "Files written" not in output
 
 

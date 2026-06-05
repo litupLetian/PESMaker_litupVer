@@ -5,13 +5,17 @@
 It does not create structures or setup folders. Run setup first, or let
 [`next`](next.md) prepare the folders.
 
+`next` prints the correct submit command. New users can simply copy the line
+printed under `What you should do next`.
+
 ## SCF Jobs
 
 ```bash
 pesmaker submit run.yaml
 ```
 
-No `--stage` means SCF labeling.
+No `--stage` means SCF labeling. This shortcut is kept for compatibility and
+for experienced users.
 
 ## Sampling Jobs
 
@@ -36,6 +40,19 @@ pesmaker submit run.yaml --stage training --dry-run
 ```
 
 Dry-run writes a log of the commands but does not call the scheduler.
+
+## Stage Names
+
+`submit` is one command with different stages:
+
+```text
+SCF single-point jobs   : pesmaker submit run.yaml
+GPUMD sampling jobs     : pesmaker submit run.yaml --stage sampling
+NEP training jobs       : pesmaker submit run.yaml --stage training
+```
+
+These stages do not conflict. PESMaker reads different manifests and output
+folders for each stage.
 
 ## Scheduler Settings
 

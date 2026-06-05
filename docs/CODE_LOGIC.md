@@ -84,7 +84,9 @@ flowchart TD
     B --> C{"structures configured and generated/manifest.jsonl missing?"}
     C -->|yes| D["generate structures"]
     D --> C
-    C -->|no| E{"sampling enabled?"}
+    C -->|no| CFG{"only generation configured?"}
+    CFG -->|yes| CFG2["write run.next.yaml and ask user to edit SCF settings"]
+    CFG -->|no| E{"sampling enabled?"}
     E -->|yes| F{"sampling_manifest exists?"}
     F -->|no| G["setup GPUMD sampling"]
     G --> F
