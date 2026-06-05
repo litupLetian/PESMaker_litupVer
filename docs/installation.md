@@ -19,23 +19,22 @@ commands inside it.
 
 ## Quick Test
 
-After a fresh install or update, use a new empty folder and run:
+After a fresh install or update, stay in the PESMaker repository root and run
+the test files:
 
 ```bash
-mkdir pesmaker-check
-cd pesmaker-check
-pesmaker init run.yaml
-pesmaker validate run.yaml
+python -m pytest
 ```
 
-The final line should look like:
+This checks that the installed Python package, config parser, structure tools,
+CLI functions, and workflow logic work.
 
-```text
-OK: run.yaml describes project 'example_project'.
+If `pytest` is not installed, install the small test dependency once:
+
+```bash
+python -m pip install ".[dev]"
+python -m pytest
 ```
-
-This is only a small command-line and YAML validation check. It does not run
-VASP, GPUMD, NEP, or any scheduler command.
 
 ## Update an Existing Checkout
 

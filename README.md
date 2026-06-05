@@ -45,23 +45,20 @@ pesmaker --help
 No internet: copy or unzip the PESMaker source folder, then run the last two
 commands inside it.
 
-Quick test after installation or update:
+Installation test:
 
 ```bash
-mkdir pesmaker-check
-cd pesmaker-check
-pesmaker init run.yaml
-pesmaker validate run.yaml
+python -m pytest
 ```
 
-The final line should look like:
+This runs the test files in `tests/` and checks that the installed Python
+package, config parser, structure tools, CLI functions, and workflow logic work.
+If `pytest` is not installed, install the small test dependency once:
 
-```text
-OK: run.yaml describes project 'example_project'.
+```bash
+python -m pip install ".[dev]"
+python -m pytest
 ```
-
-This only checks the PESMaker command and YAML parser. It does not run VASP,
-GPUMD, NEP, or any scheduler command.
 
 ## Updating an Existing Checkout
 
