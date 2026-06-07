@@ -41,8 +41,8 @@ If your YAML only has structure-generation settings, `next` generates the
 structures and writes `run.next.yaml`. Edit that follow-up file with VASP and
 submit paths, then run `pesmaker next run.next.yaml`.
 
-By default, `next` prints only `Work done` and `Next`. It still stops before
-any real cluster submission.
+By default, `next` prints the PESMaker banner, a compact `Next flow` block,
+`Work done`, and `Next`. It still stops before any real cluster submission.
 
 ## 4. Follow the Printed Next Step
 

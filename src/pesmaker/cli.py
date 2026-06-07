@@ -21,7 +21,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from pesmaker import __version__
+from pesmaker import __contact__, __version__
 from pesmaker.cli_next import (
     print_next_concise,
     print_next_status,
@@ -167,8 +167,8 @@ def main(argv: list[str] | None = None) -> int:
         "path", type=Path, nargs="?", default=Path("pesmaker.yaml")
     )
 
-    args = parser.parse_args(argv)
     _print_banner()
+    args = parser.parse_args(argv)
 
     if args.command == "init":
         return _write_starter_config(args.path)
@@ -485,6 +485,20 @@ def _stage_job_count(message: str) -> int:
 
 
 def _print_banner() -> None:
-    """Print a short command banner."""
-    print(f"PESMaker v{__version__}")
+    """Print the PESMaker command banner with version and contact information."""
+    logo_lines = [
+        r"  _____   ______   _____   __  __          _                 ",
+        r" |  __ \ |  ____| / ____| |  \/  |        | |                ",
+        r" | |__) || |__   | (___   | \  / |   __ _ | | __  ___  _ __ ",
+        r" |  ___/ |  __|   \___ \  | |\/| |  / _` || |/ / / _ \| '__|",
+        r" | |     | |____  ____) | | |  | | | (_| ||   < |  __/| |   ",
+        r" |_|     |______||_____/  |_|  |_|  \__,_||_|\_\ \___||_|   ",
+        f"                                                   v-{__version__}",
+    ]
+    for line in logo_lines:
+        print(line)
+    print("**************** Potential Energy Surface Maker ****************")
+    print("***** Automated dataset generation for machine-learned potentials *****")
+    print(f"**************** Author: {__contact__} ****************")
+    print("****************************************************************")
     print()

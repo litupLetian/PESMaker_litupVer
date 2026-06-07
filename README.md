@@ -113,9 +113,9 @@ boundary it writes a dry-run log, records the gate in
 manually. The printed line names the stage, for example `Submit SCF jobs` or
 `Submit GPUMD sampling jobs`.
 
-The default `next` output is intentionally short: it shows `Work done` and
-`Next`. Use `pesmaker status run.yaml` or `pesmaker next run.yaml --verbose`
-when you want detailed flow diagnostics.
+The default `next` output is intentionally short: it shows the current
+`Next flow`, `Work done`, and `Next`. Use `pesmaker status run.yaml` or
+`pesmaker next run.yaml --verbose` when you want detailed flow diagnostics.
 
 Manual direct generation and DFT labeling:
 

@@ -55,7 +55,10 @@ jobs:
     state_path = tmp_path / ".pesmaker" / "direct_next" / "next_state.json"
     state = json.loads(state_path.read_text(encoding="utf-8"))
     assert "scf" in state["dry_runs"]
-    assert "PESMaker v" in output
+    assert "Potential Energy Surface Maker" in output
+    assert "Next flow" in output
+    assert "Flow             : generate -> scf -> collect" in output
+    assert "Current          : SCF submission preview" in output
     assert "Work done:" in output
     assert "Structure generation complete." in output
     assert "Prepared 1 SCF job(s)" in output
@@ -118,6 +121,9 @@ jobs:
     state_path = tmp_path / ".pesmaker" / "sampling_next" / "next_state.json"
     state = json.loads(state_path.read_text(encoding="utf-8"))
     assert "sampling" in state["dry_runs"]
+    assert "Next flow" in output
+    assert "Flow             : generate -> sampling -> select -> scf -> collect" in output
+    assert "Current          : sampling submission preview" in output
     assert "Work done:" in output
     assert "Plan before execution" not in output
     assert "Inferred flow" not in output
@@ -127,6 +133,7 @@ jobs:
 
     assert main(["next", str(config_path)]) == 0
     output = capsys.readouterr().out
+    assert "Current          : waiting for sampling outputs" in output
     assert "Waiting:" in output
     assert "GPUMD movie.xyz files are not ready." in output
     assert "--stage sampling" in output
@@ -187,6 +194,9 @@ generation:
     assert followup.exists()
     assert not (tmp_path / "labeling" / "labeling_manifest.jsonl").exists()
     assert not (tmp_path / ".pesmaker").exists()
+    assert "Next flow" in output
+    assert "Flow             : generate -> config-needed" in output
+    assert "Current          : waiting for SCF settings" in output
     assert "Work done:" in output
     assert "Plan before execution" not in output
     assert "Inferred flow" not in output
@@ -321,6 +331,7 @@ jobs:
     assert (tmp_path / "training" / "submit.sh").exists()
     assert "Collected finished SCF outputs." in output
     assert "Prepared training inputs." in output
+    assert "Current          : training submission preview" in output
     assert "Plan before execution" not in output
     assert "Stage            : training" not in output
     assert "Submit training jobs" in output
@@ -346,6 +357,8 @@ labeling:
     assert main(["next", str(config_path)]) == 0
     output = capsys.readouterr().out
 
+    assert "Next flow" in output
+    assert "Current          : complete" in output
     assert "Plan before execution" not in output
     assert "Complete:" in output
     assert "No local PESMaker task needs to run now." in output
