@@ -38,10 +38,13 @@ action. `next` only previews submissions and prints the command.
 
 ## What It Prints
 
-`next` normally prints only what happened and what to do next:
+`next` first prints the PESMaker banner, then a compact workflow position,
+what happened, and what to do next:
 
 ```text
-PESMaker v0.1.0
+Next flow
+Flow             : generate -> config-needed
+Current          : waiting for SCF settings
 
 Work done:
   - Structure generation complete.
@@ -112,7 +115,9 @@ jobs:
 Then it prints:
 
 ```text
-PESMaker v0.1.0
+Next flow
+Flow             : generate -> config-needed
+Current          : waiting for SCF settings
 
 Template written : run.next.yaml
 

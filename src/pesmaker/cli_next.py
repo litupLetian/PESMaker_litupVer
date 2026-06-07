@@ -26,6 +26,12 @@ def print_next_concise(result: NextResult, *, config_path: Path) -> None:
     """Print the normal short `pesmaker next` output."""
     run_events = [event for event in result.events if event.kind == "run"]
     boundary_events = [event for event in result.events if event.kind != "run"]
+    current_event = boundary_events[-1] if boundary_events else None
+
+    print("Next flow")
+    print(f"Flow             : {result.flow}")
+    print(f"Current          : {_current_next_label(current_event, result.status)}")
+    print()
 
     if run_events:
         print("Work done:")
@@ -302,6 +308,31 @@ def _waiting_message(stage: str) -> str:
     if stage == "training":
         return "Training job output is not ready."
     return "SCF OUTCAR files are not ready."
+
+
+def _current_next_label(event: NextEvent | None, status: str) -> str:
+    if event is None:
+        return status
+    step_kind = _next_action_kind(event)
+    if step_kind == "run":
+        return event.message
+    if step_kind == "config-needed":
+        return "waiting for SCF settings"
+    if step_kind == "submit-preview":
+        return f"{_stage_display(_event_stage(event))} submission preview"
+    if step_kind in {"wait", "waiting"}:
+        return f"waiting for {_stage_display(_event_stage(event))} outputs"
+    if step_kind == "complete":
+        return "complete"
+    return event.message
+
+
+def _stage_display(stage: str) -> str:
+    if stage == "sampling":
+        return "sampling"
+    if stage == "training":
+        return "training"
+    return "SCF"
 
 
 def _template_path(event: NextEvent, config_path: Path) -> Path:
