@@ -21,10 +21,68 @@ sampling:
   output_dir: sampling
   gpumd_dir: /path/to/GPUMD/src
   potential: /path/to/nep.txt
-  temperatures: [300, 600]
+  temperature: "300-1200"
   run_steps: 300000
   run_in: templates/gpumd/run.in
+  selection:
+    trajectory_pattern: sampling/**/movie.xyz
+    output_dir: selected
+    max_count: 200
+
+jobs:
+  submit_command: sbatch
+  sub_file:
+    sampling: templates/sbatch/gpumd.sh
 ```
+
+For GPUMD, `cores_cpu` is optional. If `jobs.sub_file.sampling` is provided,
+PESMaker keeps that submit template's scheduler resource lines and only fills
+placeholders such as `{command}`, `{workdir}`, and `{job_name}`. If no submit
+template is provided, the generated `submit.sh` simply runs the resolved GPUMD
+command, such as `/path/to/GPUMD/src/gpumd`. Put GPU, partition, and walltime
+requests directly in `templates/sbatch/gpumd.sh`.
+
+## Temperature Jobs And Movie Paths
+
+Use one temperature ramp when you want a single MD job that heats or cools:
+
+```yaml
+sampling:
+  temperature: "300-1200"
+```
+
+This creates a folder like:
+
+```text
+sampling/md_000000_ramp_300K_to_1200K/movie.xyz
+```
+
+Use a temperature list when you want independent MD jobs:
+
+```yaml
+sampling:
+  temperatures: [300, 600, 900]
+```
+
+This creates folders like:
+
+```text
+sampling/md_000000_temp_300K/movie.xyz
+sampling/md_000000_temp_600K/movie.xyz
+sampling/md_000000_temp_900K/movie.xyz
+```
+
+Set selection to:
+
+```yaml
+sampling:
+  selection:
+    trajectory_pattern: sampling/**/movie.xyz
+```
+
+The `**` means "match through subdirectories". Do not use
+`sampling/movie.xyz` unless your `movie.xyz` file is directly inside
+`sampling/`.
 
 ## Inputs
 

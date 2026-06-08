@@ -36,6 +36,7 @@ def _write_submit_script(
     template_path = _job_template_path(config, stage)
     job_name = workdir.name
     resources = resources or _job_resources(config)
+    engine = _stage_engine(config, stage)
     if template_path:
         ntasks = resources.nodes * resources.cores_cpu
         text = _format_submit_template(
@@ -53,21 +54,24 @@ def _write_submit_script(
                 "vasp_ncore": resources.vasp_ncore,
             },
         )
-        text = _normalize_submit_template(
-            text,
-            command=command,
-            job_name=job_name,
-            workdir=workdir,
-            stage=stage,
-            engine=_stage_engine(config, stage),
-            resources=resources,
-        )
+        if not _preserve_user_submit_template(stage, engine):
+            text = _normalize_submit_template(
+                text,
+                command=command,
+                job_name=job_name,
+                workdir=workdir,
+                stage=stage,
+                engine=engine,
+                resources=resources,
+            )
+        elif not text.endswith("\n"):
+            text += "\n"
     else:
         text = _default_submit_script(
             command=command,
             job_name=job_name,
             stage=stage,
-            engine=_stage_engine(config, stage),
+            engine=engine,
             resources=resources,
         )
     path = workdir / "submit.sh"
@@ -91,6 +95,11 @@ def _job_template_path(config: PESMakerConfig, stage: str) -> Path | None:
             return Path(str(stage_template))
     template = config.jobs.options.get("sbatch_template")
     return Path(str(template)) if template else None
+
+
+def _preserve_user_submit_template(stage: str, engine: str) -> bool:
+    """Return true when PESMaker should not rewrite scheduler resources."""
+    return stage == "sampling" and engine.lower() == "gpumd"
 
 
 def _stage_template_value(templates: dict[str, Any], stage: str) -> Any:
@@ -220,6 +229,9 @@ def _default_submit_script(
     engine: str,
     resources: JobResources,
 ) -> str:
+    if _preserve_user_submit_template(stage, engine):
+        return _default_gpumd_submit_script(command)
+
     ntasks = resources.nodes * resources.cores_cpu
     lines = [
         "#!/bin/bash -l",
@@ -255,6 +267,16 @@ def _default_submit_script(
             "",
         ]
     )
+    return "\n".join(lines)
+
+
+def _default_gpumd_submit_script(command: str) -> str:
+    lines = [
+        "#!/bin/bash",
+        "set -euo pipefail",
+        command,
+        "",
+    ]
     return "\n".join(lines)
 
 
