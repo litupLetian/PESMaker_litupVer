@@ -403,6 +403,14 @@ def _print_stage_result(result: StageResult) -> None:
     print(f"Output directory : {result.output_dir}")
     print(f"Files written    : {len(result.files)}")
     print()
+    if result.warnings:
+        print("Warnings:")
+        for warning in result.warnings[:5]:
+            print(f"  - {warning}")
+        omitted = len(result.warnings) - 5
+        if omitted > 0:
+            print(f"  - ... {omitted} more warning(s)")
+        print()
 
 
 def _print_labeling_result(result: StageResult, config_path: Path) -> None:

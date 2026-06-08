@@ -99,6 +99,7 @@ def print_next_diagnostics(result: NextResult, *, config_path: Path) -> None:
             print(f"  - {event.message}")
             if event.result is not None:
                 print(f"    Output: {event.result.output_dir}")
+                _print_result_warnings(event.result, prefix="    ")
         print()
 
     if not boundary_events:
@@ -252,6 +253,15 @@ def _print_run_event(event: NextEvent) -> None:
     print(f"  - {event.message}")
     if event.result is not None:
         print(f"Output directory : {event.result.output_dir}")
+        _print_result_warnings(event.result)
+
+
+def _print_result_warnings(result, *, prefix: str = "") -> None:
+    for warning in result.warnings[:5]:
+        print(f"{prefix}Warning        : {warning}")
+    omitted = len(result.warnings) - 5
+    if omitted > 0:
+        print(f"{prefix}Warning        : ... {omitted} more warning(s)")
 
 
 def _print_submit_preview(event: NextEvent, *, config_path: Path) -> None:

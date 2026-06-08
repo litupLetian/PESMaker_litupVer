@@ -1340,6 +1340,74 @@ sampling:
     assert "ensemble       npt_scr 300 1500" in run_in
 
 
+def test_sampling_setup_preserves_user_run_line_and_warns_for_triclinic_npt_scr(
+    tmp_path,
+    capsys,
+):
+    """A user run.in should keep its run count while fixing triclinic npt_scr."""
+    from ase import Atoms
+    from ase.io import write
+
+    structure_path = tmp_path / "structure.xyz"
+    write(
+        structure_path,
+        Atoms(
+            "Te2",
+            positions=[(0.0, 0.0, 0.0), (2.0, 2.0, 2.0)],
+            cell=[(3.0, 0.0, 0.0), (1.0, 3.0, 0.0), (0.0, 0.0, 3.0)],
+            pbc=True,
+        ),
+        format="extxyz",
+    )
+    generated_dir = tmp_path / "generated"
+    generated_dir.mkdir()
+    (generated_dir / "manifest.jsonl").write_text(
+        json.dumps({"path": str(structure_path)}) + "\n",
+        encoding="utf-8",
+    )
+    run_template = tmp_path / "run.in"
+    run_template.write_text(
+        """potential      {potential}
+velocity       {temperature_start}
+
+ensemble       npt_scr {temperature_start} {temperature_end} 100 0 0 0 50 50 50 1000
+time_step      1
+dump_thermo    1000
+dump_position  4000
+run            4000000
+""",
+        encoding="utf-8",
+    )
+    config_path = tmp_path / "pesmaker.yaml"
+    config_path.write_text(
+        f"""project: user_run_in
+generation:
+  output_dir: {generated_dir.as_posix()}
+sampling:
+  engine: gpumd
+  output_dir: {(tmp_path / 'sampling').as_posix()}
+  potential: nep89_20250409.txt
+  temperature: 300-1200
+  run_in: {run_template.as_posix()}
+""",
+        encoding="utf-8",
+    )
+
+    assert main(["sample-setup", str(config_path)]) == 0
+    output = capsys.readouterr().out
+
+    run_in = (
+        tmp_path / "sampling" / "md_000000_ramp_300K_to_1200K" / "run.in"
+    ).read_text(encoding="utf-8")
+    assert (
+        "ensemble       npt_scr 300 1200 100 0 0 0 0 0 0 "
+        "50 50 50 50 50 50 1000"
+    ) in run_in
+    assert "run            4000000" in run_in
+    assert "run            3000000" not in run_in
+    assert "GPUMD run.in npt_scr was adjusted for triclinic cell format." in output
+
+
 def test_sampling_setup_selects_gpumd_ensemble_by_cell_shape(tmp_path):
     """GPUMD run.in generation should adapt NPT parameters to cell shape."""
     from ase import Atoms
