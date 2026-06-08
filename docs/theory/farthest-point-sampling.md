@@ -48,6 +48,8 @@ PESMaker stops selection when either condition is met:
 
 Use `max_count` to control labeling cost. Use `min_distance` to avoid spending
 DFT calculations on frames that are nearly redundant in descriptor space.
+`max_count` is optional; if omitted, FPS keeps selecting until the distance rule
+stops it or all frames have been selected.
 
 ## Descriptor Pooling
 
@@ -75,7 +77,7 @@ sampling:
     descriptor: calorine
     potential: /path/to/nep.txt
     min_distance: 0.2
-    max_count: 200
+    max_count: 200  # optional cap
     plot: true
 ```
 

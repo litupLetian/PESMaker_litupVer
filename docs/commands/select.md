@@ -20,8 +20,8 @@ sampling:
     output_dir: selected
     descriptor: calorine
     potential: /path/to/nep.txt
-    max_count: 200
     min_distance: 0.2
+    max_count: 200
     plot: true
 ```
 
@@ -30,6 +30,17 @@ sampling:
 PESMaker reads trajectory frames, builds one descriptor vector per frame, then
 uses farthest point sampling to keep frames that spread across descriptor
 space.
+
+`min_distance` and `max_count` are two stop rules:
+
+- `min_distance`: stop when the next farthest frame is still closer than this
+  distance to the selected set. This avoids choosing very similar structures.
+- `max_count`: optional cap on how many frames to keep. Omit it if you only
+  want the distance rule to decide how many structures are different enough.
+
+For example, `min_distance: 0.2` and `max_count: 200` means "keep at most 200
+frames, but stop earlier if the remaining frames are too similar." The distance
+is measured in descriptor space, not in Angstrom.
 
 For quick debugging, use:
 
