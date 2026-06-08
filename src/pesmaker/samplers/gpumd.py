@@ -93,6 +93,7 @@ def setup_sampling(config: PESMakerConfig) -> StageResult:
         default=DEFAULT_GPUMD_RUN_IN,
     )
     files: list[Path] = []
+    warnings: list[str] = []
     manifest_path = output_dir / "sampling_manifest.jsonl"
     with manifest_path.open("w", encoding="utf-8") as manifest:
         job_index = 0
@@ -108,13 +109,16 @@ def setup_sampling(config: PESMakerConfig) -> StageResult:
                     stage_dir,
                 )
                 run_in_path = stage_dir / "run.in"
-                run_in = _render_sampling_run_in(
+                run_in, run_in_warnings = _render_sampling_run_in(
                     config.sampling.options,
                     run_template,
                     condition,
                     atoms,
                     potential_name=potential_name,
                 )
+                for warning in run_in_warnings:
+                    if warning not in warnings:
+                        warnings.append(warning)
                 run_in_path.write_text(run_in, encoding="utf-8")
                 command = _sampling_command(config)
                 submit_path = _write_submit_script(
@@ -153,7 +157,12 @@ def setup_sampling(config: PESMakerConfig) -> StageResult:
                 job_index += 1
     files.append(manifest_path)
     job_count = len(records) * len(conditions)
-    return StageResult(output_dir, tuple(files), f"Prepared {job_count} MD job(s)")
+    return StageResult(
+        output_dir,
+        tuple(files),
+        f"Prepared {job_count} MD job(s)",
+        warnings=tuple(warnings),
+    )
 
 
 def _sampling_conditions(options: dict[str, Any]) -> tuple[SamplingCondition, ...]:
@@ -225,9 +234,10 @@ def _render_sampling_run_in(
     atoms,
     *,
     potential_name: str | None = None,
-) -> str:
+) -> tuple[str, tuple[str, ...]]:
     potential = potential_name or str(options.get("potential", "nep89_20250409.txt"))
     ensemble = _sampling_ensemble_line(options, condition, atoms)
+    explicit_run_steps = _has_explicit_sampling_run_steps(options)
     run_steps = _sampling_run_steps(options)
     rendered = template.format(
         potential=potential,
@@ -237,6 +247,7 @@ def _render_sampling_run_in(
         temperature_start=_format_temperature(condition.start),
         temperature_end=_format_temperature(condition.end),
     )
+    warnings = _sampling_run_in_warnings(options, rendered, atoms)
     rendered = _rewrite_gpumd_run_line(
         rendered, "potential", f"potential      {potential}"
     )
@@ -246,7 +257,9 @@ def _render_sampling_run_in(
         f"velocity       {_format_temperature(condition.start)}",
     )
     rendered = _rewrite_gpumd_run_line(rendered, "ensemble", ensemble)
-    return _rewrite_gpumd_run_line(rendered, "run", f"run            {run_steps}")
+    if explicit_run_steps or not _has_gpumd_run_line(rendered, "run"):
+        rendered = _rewrite_gpumd_run_line(rendered, "run", f"run            {run_steps}")
+    return rendered, warnings
 
 
 def _sampling_ensemble_line(
@@ -388,6 +401,48 @@ def _sampling_run_steps(options: dict[str, Any]) -> int:
     if value < 1:
         raise ValueError("sampling.run_steps must be a positive integer")
     return value
+
+
+def _has_explicit_sampling_run_steps(options: dict[str, Any]) -> bool:
+    return "run_steps" in options or "steps" in options
+
+
+def _sampling_run_in_warnings(
+    options: dict[str, Any],
+    rendered: str,
+    atoms,
+) -> tuple[str, ...]:
+    if not options.get("run_in"):
+        return ()
+    mode = _sampling_ensemble_mode(options, atoms)
+    if mode not in {"triclinic", "2d_triclinic"}:
+        return ()
+    line = _find_gpumd_run_line(rendered, "ensemble")
+    if line is None or "npt_scr" not in line:
+        return ()
+    if _npt_scr_value_count(line) == 16:
+        return ()
+    return ("GPUMD run.in npt_scr was adjusted for triclinic cell format.",)
+
+
+def _find_gpumd_run_line(text: str, keyword: str) -> str | None:
+    for line in text.splitlines():
+        if line.strip().startswith(keyword):
+            return line
+    return None
+
+
+def _has_gpumd_run_line(text: str, keyword: str) -> bool:
+    return _find_gpumd_run_line(text, keyword) is not None
+
+
+def _npt_scr_value_count(line: str) -> int:
+    parts = line.split()
+    try:
+        index = parts.index("npt_scr")
+    except ValueError:
+        return 0
+    return len(parts) - index - 1
 
 
 def _is_orthogonal_cell(atoms) -> bool:

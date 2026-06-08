@@ -46,6 +46,11 @@ When a GPUMD sampling template is named `gpumd.sh`, PESMaker also writes
 `gpumd.sh` in each MD job directory so local submission can run
 `bash gpumd.sh`. A `submit.sh` compatibility copy is kept for older workflows.
 
+If `sampling.run_in` already contains a `run` line, PESMaker keeps that step
+count unless `sampling.run_steps` is explicitly set in the YAML. For
+non-orthogonal cells, PESMaker adjusts `ensemble npt_scr` to the triclinic
+format and prints a short warning.
+
 ## Temperature Jobs And Movie Paths
 
 Use one temperature ramp when you want a single MD job that heats or cools:
