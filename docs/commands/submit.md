@@ -69,6 +69,10 @@ jobs:
 
 For a one-stage SCF run, `sub_file` can be a single path.
 
+For GPUMD sampling, PESMaker does not rewrite CPU resource directives in the
+provided sampling submit template. Keep GPU, partition, time, and any other
+cluster-specific settings in `templates/sbatch/gpumd.sh`.
+
 ## Important Rule
 
 Submit from PESMaker with `pesmaker submit ...`, or manually submit from inside

@@ -21,10 +21,26 @@ sampling:
   output_dir: sampling
   gpumd_dir: /path/to/GPUMD/src
   potential: /path/to/nep.txt
-  temperatures: [300, 600]
+  temperature: "300-1200"
   run_steps: 300000
   run_in: templates/gpumd/run.in
+  selection:
+    trajectory_pattern: sampling/**/movie.xyz
+    output_dir: selected
+    max_count: 200
+
+jobs:
+  submit_command: sbatch
+  sub_file:
+    sampling: templates/sbatch/gpumd.sh
 ```
+
+For GPUMD, `cores_cpu` is optional. If `jobs.sub_file.sampling` is provided,
+PESMaker keeps that submit template's scheduler resource lines and only fills
+placeholders such as `{command}`, `{workdir}`, and `{job_name}`. If no submit
+template is provided, the generated `submit.sh` simply runs the resolved GPUMD
+command, such as `/path/to/GPUMD/src/gpumd`. Put GPU, partition, and walltime
+requests directly in `templates/sbatch/gpumd.sh`.
 
 ## Inputs
 

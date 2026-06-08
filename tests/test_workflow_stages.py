@@ -1088,6 +1088,72 @@ sampling:
     assert "potential      nep89_20250409.txt" in run_in
     submit = (workdir / "submit.sh").read_text(encoding="utf-8")
     assert str(gpumd_dir / "gpumd") in submit
+    assert "#SBATCH --ntasks" not in submit
+    assert "#SBATCH --cpus-per-task" not in submit
+
+
+def test_sampling_setup_preserves_gpumd_submit_template_resources(tmp_path):
+    """GPUMD user submit templates should not be rewritten with CPU resources."""
+    from ase import Atoms
+    from ase.io import write
+
+    structure_path = tmp_path / "structure.xyz"
+    write(
+        structure_path,
+        Atoms("Te", positions=[(0.0, 0.0, 0.0)], cell=[3, 3, 20], pbc=True),
+        format="extxyz",
+    )
+    generated_dir = tmp_path / "generated"
+    generated_dir.mkdir()
+    (generated_dir / "manifest.jsonl").write_text(
+        json.dumps({"path": str(structure_path)}) + "\n",
+        encoding="utf-8",
+    )
+    gpumd_template = tmp_path / "gpumd.sh"
+    gpumd_template.write_text(
+        """#!/bin/bash
+#SBATCH --job-name=user_gpumd
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --gres=gpu:1
+
+cd "{workdir}"
+{command}
+""",
+        encoding="utf-8",
+    )
+    config_path = tmp_path / "pesmaker.yaml"
+    config_path.write_text(
+        f"""project: preserve_gpumd_template
+generation:
+  output_dir: {generated_dir.as_posix()}
+sampling:
+  engine: gpumd
+  output_dir: {(tmp_path / 'sampling').as_posix()}
+  command: /opt/gpumd/gpumd
+  temperature: 300
+jobs:
+  submit_command: sbatch
+  nodes: 2
+  cores_cpu: 64
+  gpus: 4
+  sub_file:
+    sampling: {gpumd_template.as_posix()}
+""",
+        encoding="utf-8",
+    )
+
+    assert main(["sample-setup", str(config_path)]) == 0
+
+    workdir = tmp_path / "sampling" / "md_000000_temp_300K"
+    submit = (workdir / "submit.sh").read_text(encoding="utf-8")
+    assert "#SBATCH --job-name=user_gpumd" in submit
+    assert "#SBATCH --ntasks=1" in submit
+    assert "#SBATCH --gres=gpu:1" in submit
+    assert "#SBATCH --ntasks=128" not in submit
+    assert "#SBATCH --gres=gpu:4" not in submit
+    assert f'cd "{workdir}"' in submit
+    assert "/opt/gpumd/gpumd" in submit
 
 
 def test_sampling_setup_writes_temperature_ramp(tmp_path):

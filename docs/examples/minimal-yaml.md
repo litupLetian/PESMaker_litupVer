@@ -124,7 +124,7 @@ sampling:
   output_dir: sampling
   gpumd_dir: /path/to/GPUMD/src
   potential: /path/to/nep.txt
-  temperatures: [300, 600]
+  temperature: "300-1200"
   run_steps: 300000
   selection:
     trajectory_pattern: sampling/**/movie.xyz
