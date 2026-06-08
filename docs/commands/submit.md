@@ -67,7 +67,25 @@ jobs:
     training: templates/sbatch/nep.sh
 ```
 
-For a one-stage SCF run, `sub_file` can be a single path.
+If your YAML only uses one submit template, `sub_file` can be a single path:
+
+```yaml
+jobs:
+  submit_command: sbatch
+  sub_file: /home/a4s5d/LT/yixiu/MLP_structure/1.Te/1.Material_project_structure/sub.sh
+```
+
+If one YAML contains multiple stages, use a mapping so each stage gets the
+right template:
+
+```yaml
+jobs:
+  submit_command: sbatch
+  sub_file:
+    sampling: templates/sbatch/gpumd.sh
+    labeling: templates/sbatch/vasp_cpu_36.sh
+    training: templates/sbatch/nep.sh
+```
 
 For GPUMD sampling, PESMaker does not rewrite CPU resource directives in the
 provided sampling submit template. Keep GPU, partition, time, and any other

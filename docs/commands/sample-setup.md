@@ -42,6 +42,48 @@ template is provided, the generated `submit.sh` simply runs the resolved GPUMD
 command, such as `/path/to/GPUMD/src/gpumd`. Put GPU, partition, and walltime
 requests directly in `templates/sbatch/gpumd.sh`.
 
+## Temperature Jobs And Movie Paths
+
+Use one temperature ramp when you want a single MD job that heats or cools:
+
+```yaml
+sampling:
+  temperature: "300-1200"
+```
+
+This creates a folder like:
+
+```text
+sampling/md_000000_ramp_300K_to_1200K/movie.xyz
+```
+
+Use a temperature list when you want independent MD jobs:
+
+```yaml
+sampling:
+  temperatures: [300, 600, 900]
+```
+
+This creates folders like:
+
+```text
+sampling/md_000000_temp_300K/movie.xyz
+sampling/md_000000_temp_600K/movie.xyz
+sampling/md_000000_temp_900K/movie.xyz
+```
+
+Set selection to:
+
+```yaml
+sampling:
+  selection:
+    trajectory_pattern: sampling/**/movie.xyz
+```
+
+The `**` means "match through subdirectories". Do not use
+`sampling/movie.xyz` unless your `movie.xyz` file is directly inside
+`sampling/`.
+
 ## Inputs
 
 PESMaker looks for structures in this order:
