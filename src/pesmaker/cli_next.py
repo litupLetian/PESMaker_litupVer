@@ -243,7 +243,7 @@ def print_next_preflight(result: NextResult, *, config_path: Path) -> None:
 def submit_action_label(stage: str) -> str:
     """Return the user-facing label for a submit stage."""
     if stage == "sampling":
-        return "Submit GPUMD sampling jobs"
+        return "Submit sampling jobs"
     if stage == "training":
         return "Submit training jobs"
     return "Submit SCF jobs"
@@ -314,7 +314,7 @@ def _print_waiting(event: NextEvent, *, config_path: Path) -> None:
 
 def _waiting_message(stage: str) -> str:
     if stage == "sampling":
-        return "GPUMD movie.xyz files are not ready."
+        return "Sampling trajectory files are not ready."
     if stage == "training":
         return "Training job output is not ready."
     return "SCF OUTCAR files are not ready."

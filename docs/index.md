@@ -32,7 +32,7 @@ You do not need to remember the full stage chain for normal use.
 ```text
 input structures
   -> generated structures
-  -> optional GPUMD sampling
+  -> optional GPUMD or LAMMPS-MACE sampling
   -> optional frame selection
   -> VASP SCF setup and submission
   -> extxyz dataset collection
@@ -40,8 +40,8 @@ input structures
 ```
 
 `next` decides which part of this flow is active by reading the YAML sections
-and checking files such as `generated/manifest.jsonl`, `movie.xyz`, `OUTCAR`,
-`train.xyz`, and `training/submit.sh`.
+and checking files such as `generated/manifest.jsonl`, sampling trajectories,
+`OUTCAR`, `train.xyz`, and `training/submit.sh`.
 
 ## Manual Flow
 

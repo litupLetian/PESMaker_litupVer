@@ -102,7 +102,12 @@ def _job_template_path(config: PESMakerConfig, stage: str) -> Path | None:
 
 def _preserve_user_submit_template(stage: str, engine: str) -> bool:
     """Return true when PESMaker should not rewrite scheduler resources."""
-    return stage == "sampling" and engine.lower() == "gpumd"
+    normalized_engine = engine.lower().replace("_", "-")
+    return stage == "sampling" and normalized_engine in {
+        "gpumd",
+        "mace",
+        "lammps-mace",
+    }
 
 
 def _submit_script_path(
@@ -245,7 +250,7 @@ def _default_submit_script(
     resources: JobResources,
 ) -> str:
     if _preserve_user_submit_template(stage, engine):
-        return _default_gpumd_submit_script(command)
+        return _default_sampling_submit_script(command)
 
     ntasks = resources.nodes * resources.cores_cpu
     lines = [
@@ -285,7 +290,7 @@ def _default_submit_script(
     return "\n".join(lines)
 
 
-def _default_gpumd_submit_script(command: str) -> str:
+def _default_sampling_submit_script(command: str) -> str:
     lines = [
         "#!/bin/bash",
         "set -euo pipefail",

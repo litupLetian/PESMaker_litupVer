@@ -1325,6 +1325,176 @@ jobs:
     assert "bash submit.sh" not in log.read_text(encoding="utf-8")
 
 
+def test_mace_sampling_setup_writes_lammps_inputs_and_preserves_submit_template(
+    tmp_path,
+):
+    """MACE sampling should render LAMMPS inputs while preserving lammps.sh."""
+    from ase import Atoms
+    from ase.io import write
+
+    structure_path = tmp_path / "structure.xyz"
+    write(
+        structure_path,
+        Atoms(
+            symbols=["Te", "Pd", "Te"],
+            positions=[(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0)],
+            cell=[5.0, 5.0, 5.0],
+            pbc=True,
+        ),
+        format="extxyz",
+    )
+    generated_dir = tmp_path / "generated"
+    generated_dir.mkdir()
+    (generated_dir / "manifest.jsonl").write_text(
+        json.dumps({"path": str(structure_path)}) + "\n",
+        encoding="utf-8",
+    )
+    model = tmp_path / "mace-omat-0-small.model-mliap_lammps.pt"
+    model.write_text("fake model\n", encoding="utf-8")
+    run_template = tmp_path / "in.run_mace_npt"
+    run_template.write_text(
+        """variable Tstart equal {temperature_start}
+variable Tstop equal {temperature_end}
+variable Tdamp equal ${ts}*100
+read_data {data_file}
+pair_style mliap unified {potential} 0
+pair_coeff * * {elements}
+dump myDump all custom 3000 {trajectory} id element x y z
+dump_modify myDump sort id element {elements}
+fix MD all npt temp ${Tstart} ${Tstop} ${Tdamp} x 0 0 ${Pdamp} y 0 0 ${Pdamp} z 0 0 ${Pdamp} couple none
+""",
+        encoding="utf-8",
+    )
+    lammps_template = tmp_path / "lammps.sh"
+    lammps_template.write_text(
+        """#!/bin/bash
+#SBATCH --job-name=user_lammps
+#SBATCH --ntasks=1
+export CUDA_VISIBLE_DEVICES=0
+export MACE_TIME=true
+mpirun -np 1 /path/to/lmp -k on g 1 -sf kk -pk kokkos newton on neigh half -in in.run_mace_npt
+""",
+        encoding="utf-8",
+    )
+    config_path = tmp_path / "pesmaker.yaml"
+    config_path.write_text(
+        f"""project: mace_sampling
+generation:
+  output_dir: {generated_dir.as_posix()}
+sampling:
+  engine: mace
+  output_dir: {(tmp_path / 'sampling').as_posix()}
+  potential: {model.as_posix()}
+  run_in: {run_template.as_posix()}
+  temperature: 300-1200
+  trajectory: mace.lammpstrj
+jobs:
+  submit_command: nohup
+  sub_file: {lammps_template.as_posix()}
+""",
+        encoding="utf-8",
+    )
+
+    assert main(["sample-setup", str(config_path)]) == 0
+
+    workdir = tmp_path / "sampling" / "md_000000_ramp_300K_to_1200K"
+    data_in = (workdir / "data.in").read_text(encoding="utf-8")
+    run_in = (workdir / "in.run_mace_npt").read_text(encoding="utf-8")
+    submit = (workdir / "lammps.sh").read_text(encoding="utf-8")
+
+    assert "1      127.599" in data_in
+    assert "# Te" in data_in
+    assert "# Pd" in data_in
+    assert "variable Tdamp equal ${ts}*100" in run_in
+    assert f"pair_style mliap unified {model.resolve()} 0" in run_in
+    assert "pair_coeff * * Te Pd" in run_in
+    assert "dump_modify myDump sort id element Te Pd" in run_in
+    assert "mace.lammpstrj" in run_in
+    assert "#SBATCH --job-name=user_lammps" in submit
+    assert "#SBATCH --ntasks=1" in submit
+    assert "#SBATCH --ntasks=36" not in submit
+    assert (workdir / "submit.sh").read_text(encoding="utf-8") == submit
+    manifest = json.loads(
+        (tmp_path / "sampling" / "sampling_manifest.jsonl").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert manifest["engine"] == "mace"
+    assert manifest["elements"] == ["Te", "Pd"]
+    assert manifest["data_file"] == str(workdir / "data.in")
+    assert manifest["run_in"] == str(workdir / "in.run_mace_npt")
+    assert manifest["submit_script"] == str(workdir / "lammps.sh")
+
+    result = submit_jobs(load_config(config_path), stage="sampling", dry_run=True)
+    assert result.message == "Would submit 1 sampling job(s)"
+    log = tmp_path / "sampling" / "sampling_submitted_jobs.txt"
+    assert f"DRY-RUN (cd {workdir} && nohup bash lammps.sh > out 2>&1 &)" in (
+        log.read_text(encoding="utf-8")
+    )
+
+
+def test_mace_sampling_renders_d3_template_without_special_yaml(tmp_path):
+    """D3 is controlled by the user's LAMMPS template, not extra YAML fields."""
+    from ase import Atoms
+    from ase.io import write
+
+    structure_path = tmp_path / "structure.xyz"
+    write(
+        structure_path,
+        Atoms(
+            "Te",
+            positions=[(0.0, 0.0, 0.0)],
+            cell=[5.0, 5.0, 5.0],
+            pbc=True,
+        ),
+        format="extxyz",
+    )
+    generated_dir = tmp_path / "generated"
+    generated_dir.mkdir()
+    (generated_dir / "manifest.jsonl").write_text(
+        json.dumps({"path": str(structure_path)}) + "\n",
+        encoding="utf-8",
+    )
+    run_template = tmp_path / "in.run_mace_d3"
+    run_template.write_text(
+        """read_data {data_file}
+pair_style hybrid/overlay &
+           mliap unified {potential} 0 &
+           dispersion/d3 bj pbe 12.0 6.0
+pair_coeff * * mliap {elements}
+pair_coeff * * dispersion/d3 {elements}
+""",
+        encoding="utf-8",
+    )
+    lammps_template = tmp_path / "lammps.sh"
+    lammps_template.write_text("#!/bin/bash\n/path/to/lmp -in in.run_mace_d3\n")
+    config_path = tmp_path / "pesmaker.yaml"
+    config_path.write_text(
+        f"""project: mace_d3
+generation:
+  output_dir: {generated_dir.as_posix()}
+sampling:
+  engine: lammps_mace
+  output_dir: {(tmp_path / 'sampling').as_posix()}
+  potential: /models/mace-omat-0-small.model-mliap_lammps.pt
+  run_in: {run_template.as_posix()}
+  temperature: 300
+jobs:
+  sub_file: {lammps_template.as_posix()}
+""",
+        encoding="utf-8",
+    )
+
+    assert main(["sample-setup", str(config_path)]) == 0
+
+    run_in = (
+        tmp_path / "sampling" / "md_000000_temp_300K" / "in.run_mace_d3"
+    ).read_text(encoding="utf-8")
+    assert "mliap unified /models/mace-omat-0-small.model-mliap_lammps.pt 0" in run_in
+    assert "pair_coeff * * mliap Te" in run_in
+    assert "pair_coeff * * dispersion/d3 Te" in run_in
+
+
 def test_sampling_setup_writes_temperature_ramp(tmp_path):
     """A temperature range should produce one ramp MD job."""
     from ase import Atoms

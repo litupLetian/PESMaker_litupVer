@@ -111,7 +111,7 @@ edit the INCAR, POTCAR, VASP, and submit-script paths there, then run
 boundary it writes a dry-run log, records the gate in
 `.pesmaker/<project>/next_state.json`, and prints the command to submit
 manually. The printed line names the stage, for example `Submit SCF jobs` or
-`Submit GPUMD sampling jobs`.
+`Submit sampling jobs`.
 
 The default `next` output is intentionally short: it shows the current
 `Next flow`, `Work done`, and `Next`. Use `pesmaker status run.yaml` or
@@ -141,12 +141,12 @@ pesmaker train-setup run.yaml
 pesmaker submit run.yaml --stage training
 ```
 
-`submit` always submits `submit.sh` files prepared by an earlier setup command.
+`submit` always submits the stage scripts prepared by an earlier setup command.
 Without `--stage`, it submits the SCF labeling stage by default.
 
 ```text
 generated/   # supercells, surfaces, defects, optional perturbations
-sampling/    # GPUMD MD job folders and submit scripts
+sampling/    # GPUMD or LAMMPS-MACE MD job folders and submit scripts
 selected/    # representative frames selected from trajectories
 labeling/    # VASP SCF calculation folders
 train.xyz    # collected labeled dataset
@@ -174,9 +174,8 @@ https://Tingliangstu.github.io/PESMaker/
 ## Current Scope
 
 Current implemented stages cover structure generation, GPUMD sampling setup,
-trajectory-frame selection, VASP SCF setup, scheduler submission, extxyz dataset
-collection, and NEP training setup. Future backends such as LAMMPS-MACE can use
-the same stage boundaries.
+LAMMPS-MACE sampling setup, trajectory-frame selection, VASP SCF setup,
+scheduler submission, extxyz dataset collection, and NEP training setup.
 
 ## License
 

@@ -26,13 +26,14 @@
 
 - Train GPUMD/NEP from generated datasets.
 - Train MACE from generated datasets.
+- Sample structures with LAMMPS-MACE foundation models.
 - Summarize train/validation/test errors.
 - Package the final potential with a model card.
 
 ## Later modules
 
 - CP2K labeler.
-- MACE-OMAT, MACE-MP, MatterSim, Orb, SevenNet, and NEP sampling backends.
+- MatterSim, Orb, SevenNet, and additional sampling backends.
 - Application recipes for diffusion, thermal transport, alloys, defects,
   surfaces, adsorption, transition states, and reactions.
 - Active-learning loop with uncertainty or committee-based candidate selection.

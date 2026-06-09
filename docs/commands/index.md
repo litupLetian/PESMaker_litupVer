@@ -26,7 +26,7 @@ to be submitted, `next` writes a dry-run log and prints the exact
 | [`next`](next.md) | Continue the workflow until a submit, wait, or complete point. |
 | [`status`](status.md) | Show what `next` would do without writing files. |
 | [`generate`](generate.md) | Manually generate structures. |
-| [`sample-setup`](sample-setup.md) | Manually prepare GPUMD sampling folders. |
+| [`sample-setup`](sample-setup.md) | Manually prepare GPUMD or LAMMPS-MACE sampling folders. |
 | [`select`](select.md) | Manually select MD frames. |
 | [`scf-setup`](scf-setup.md) | Manually prepare VASP SCF folders. |
 | [`submit`](submit.md) | Submit prepared `submit.sh` files. |
@@ -41,7 +41,7 @@ to be submitted, `next` writes a dry-run log and prints the exact
 structures configured + generated/manifest missing -> run generate
 sampling configured                                -> prepare sampling
 sampling submit not previewed                      -> preview sampling submit
-movie.xyz exists                                   -> run select
+sampling trajectory exists                         -> run select
 labeling configured                                -> prepare SCF
 SCF submit not previewed                           -> preview SCF submit
 OUTCAR exists                                      -> collect train.xyz

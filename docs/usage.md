@@ -10,8 +10,8 @@ Start from a template:
 pesmaker init run.yaml
 ```
 
-Edit the paths for your structures, VASP, GPUMD, NEP potential, and scheduler
-templates.
+Edit the paths for your structures, VASP, GPUMD or LAMMPS-MACE, potentials,
+and scheduler templates.
 
 Minimal examples are here:
 
@@ -65,7 +65,8 @@ and exits without doing extra work.
 
 ## 5. Repeat After External Jobs Finish
 
-After GPUMD creates `movie.xyz` or VASP creates `OUTCAR`, run:
+After GPUMD creates `movie.xyz`, LAMMPS-MACE creates the configured trajectory,
+or VASP creates `OUTCAR`, run:
 
 ```bash
 pesmaker next run.yaml

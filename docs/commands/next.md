@@ -85,7 +85,8 @@ and exits without writing `.pesmaker/` state.
 ## Generate-Only Example
 
 If your YAML only contains `structures` and `generation`, `next` generates the
-structures and stops. It does not guess your VASP, GPUMD, or submit settings.
+structures and stops. It does not guess your VASP, GPUMD, LAMMPS-MACE, or
+submit settings.
 
 ```text
 generate -> config-needed
@@ -160,8 +161,8 @@ PESMaker will collect the dataset.
 
 ## Sampling Example
 
-With `sampling.engine: gpumd` and `sampling.selection`, the first `next` run
-will usually:
+With `sampling.engine: gpumd` or `sampling.engine: mace` and
+`sampling.selection`, the first `next` run will usually:
 
 ```text
 generate -> sample-setup -> submit --stage sampling --dry-run
@@ -172,10 +173,11 @@ It executes the local stages and stops at the sampling submission preview.
 Then it prints:
 
 ```text
-Submit GPUMD sampling jobs: pesmaker submit run.yaml --stage sampling
+Submit sampling jobs: pesmaker submit run.yaml --stage sampling
 ```
 
-After GPUMD writes `movie.xyz`, run:
+After GPUMD writes `movie.xyz` or LAMMPS-MACE writes the trajectory configured
+in `sampling.selection.trajectory_pattern`, run:
 
 ```bash
 pesmaker next run.yaml
