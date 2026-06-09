@@ -54,6 +54,12 @@ count unless `sampling.run_steps` is explicitly set in the YAML. For
 non-orthogonal cells, PESMaker adjusts `ensemble npt_scr` to the triclinic
 format and prints a short warning.
 
+Set `sampling.preserve_run_in: true` when you want PESMaker to copy your GPUMD
+`run_in` exactly as written. In that mode PESMaker still prepares `model.xyz`,
+potential files, manifests, and submit scripts, but it does not change
+`potential`, `velocity`, `ensemble`, or `run` lines. `sampling.run_in` is
+required when this option is enabled.
+
 ## LAMMPS-MACE Sampling
 
 Use `sampling.engine: mace` when generated structures should be sampled with a
@@ -69,6 +75,13 @@ thermo output, timestep, and total run length under your direct control.
 PESMaker's job is to supply the generated `data.in`, the correct element order,
 the selected MACE model path, and temperature values.
 
+If you want PESMaker to leave the LAMMPS input completely untouched, set
+`sampling.preserve_run_in: true`. Then PESMaker copies `sampling.run_in` exactly
+as written into every sampling job directory and does not replace placeholders,
+change temperatures, change elements, or convert NVT to NPT. Use this when your
+LAMMPS input is already fully configured and self-contained. `sampling.run_in`
+is required in this mode.
+
 ```yaml
 project: mace_sampling
 
@@ -77,6 +90,8 @@ sampling:
   output_dir: sampling
   potential: /path/to/mace-omat-0-small.model-mliap_lammps.pt
   run_in: templates/lammps/in.run_mace_npt
+  # Optional: set true to copy run_in verbatim with no PESMaker edits.
+  # preserve_run_in: true
   temperature: "300-1200"
   selection:
     trajectory_pattern: sampling/**/*.lammpstrj
