@@ -88,12 +88,12 @@ flowchart TD
     CFG -->|yes| CFG2["write run.next.yaml and ask user to edit SCF settings"]
     CFG -->|no| E{"sampling enabled?"}
     E -->|yes| F{"sampling_manifest exists?"}
-    F -->|no| G["setup GPUMD sampling"]
+    F -->|no| G["setup GPUMD or LAMMPS-MACE sampling"]
     G --> F
     F -->|yes| H{"sampling dry-run recorded?"}
     H -->|no| I["submit --stage sampling --dry-run; record state"]
     H -->|yes| J{"selection configured?"}
-    J -->|yes| K{"movie.xyz exists?"}
+    J -->|yes| K{"sampling trajectory exists?"}
     K -->|no| L["wait and print sampling submit command"]
     K -->|yes| M{"selected manifest exists?"}
     M -->|no| N["select representative frames"]

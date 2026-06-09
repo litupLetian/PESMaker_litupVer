@@ -42,10 +42,11 @@ def select_sampling_frames(config: PESMakerConfig) -> StageResult:
     max_count = int(max_count) if max_count is not None else None
 
     frames = _read_trajectory_frames(pattern)
+    sampling_options = {"engine": config.sampling.engine, **config.sampling.options}
     features, descriptor_backend = _selection_features(
         frames,
         options,
-        sampling_options=config.sampling.options,
+        sampling_options=sampling_options,
     )
     selected_indices, selection_distances = _farthest_point_indices(
         features,
@@ -152,7 +153,9 @@ def _selection_features(
     *,
     sampling_options: dict[str, Any],
 ) -> tuple[np.ndarray, str]:
-    descriptor = str(options.get("descriptor", "calorine")).lower()
+    descriptor = str(
+        options.get("descriptor", _default_selection_descriptor(sampling_options))
+    ).lower()
     if descriptor in {"calorine", "nep", "calorine-nep", "calorine_nep"}:
         selection_potential = options.get("potential", options.get("model"))
         potential_options = dict(sampling_options)
@@ -166,6 +169,13 @@ def _selection_features(
     if descriptor in {"simple", "geometry"}:
         return _structure_features(frames), "simple"
     raise ValueError("sampling.selection.descriptor must be 'calorine' or 'simple'")
+
+
+def _default_selection_descriptor(sampling_options: dict[str, Any]) -> str:
+    engine = str(sampling_options.get("engine", "")).lower().replace("_", "-")
+    if engine in {"mace", "lammps-mace"}:
+        return "simple"
+    return "calorine"
 
 
 def _calorine_nep_structure_features(

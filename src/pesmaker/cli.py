@@ -39,7 +39,7 @@ from pesmaker.generators.structures import (
 from pesmaker.jobs.submit import submit_jobs
 from pesmaker.labelers.vasp import setup_labeling
 from pesmaker.results import StageResult
-from pesmaker.samplers.gpumd import setup_sampling
+from pesmaker.samplers import setup_sampling
 from pesmaker.samplers.selection import select_sampling_frames
 from pesmaker.trainers.nep import setup_training
 from pesmaker.workflow.next import inspect_next, run_next

@@ -2,8 +2,8 @@
 
 This page gives small working shapes for common tasks.
 
-Replace paths such as `POSCAR`, `/path/to/vasp_std`, `/path/to/GPUMD/src`, and
-`/path/to/nep.txt` with your local files.
+Replace paths such as `POSCAR`, `/path/to/vasp_std`, `/path/to/GPUMD/src`,
+`/path/to/nep.txt`, `/path/to/lmp`, and MACE model paths with your local files.
 
 Normal use:
 
@@ -166,6 +166,66 @@ pesmaker next run.yaml
 ```
 
 Then follow the `Next` block printed by `next`.
+
+## LAMMPS-MACE Sampling, Selection, SCF
+
+Use this when generated structures first seed MACE-omat-small or another MACE
+MLIAP model through LAMMPS.
+
+```yaml
+project: mace_sampling_training
+
+structures:
+  - POSCAR
+
+generation:
+  output_dir: generated
+  supercell: [4, 4, 4]
+
+sampling:
+  engine: mace
+  output_dir: sampling
+  potential: /path/to/mace-omat-0-small.model-mliap_lammps.pt
+  run_in: templates/lammps/in.run_mace_npt
+  temperature: "300-1200"
+  selection:
+    trajectory_pattern: sampling/**/*.lammpstrj
+    output_dir: selected
+    descriptor: simple
+    min_distance: 0.005
+    max_count: 200
+
+labeling:
+  engine: vasp
+  output_dir: labeling
+  incar: templates/vasp/INCAR
+  potcar_library: /path/to/VASP/potentials
+  command: /path/to/vasp_std
+  dataset_path: train.xyz
+
+jobs:
+  submit_command: nohup
+  sub_file:
+    sampling: templates/lammps/lammps.sh
+    labeling: templates/sbatch/vasp_cpu_36.sh
+```
+
+`templates/lammps/lammps.sh` should contain the real LAMMPS command for your
+machine:
+
+```bash
+#!/bin/bash
+export CUDA_VISIBLE_DEVICES=0
+export MACE_TIME=true
+
+mpirun -np 1 /path/to/lmp -k on g 1 -sf kk -pk kokkos newton on neigh half -in in.run_mace_npt
+```
+
+The LAMMPS input template controls NPT/NVT, D3, dump frequency, thermo
+frequency, and run length. PESMaker only fills `{data_file}`, `{potential}`,
+`{elements}`, `{temperature_start}`, `{temperature_end}`, and `{trajectory}`.
+See [`sample-setup`](../commands/sample-setup.md#lammps-mace-sampling) for
+complete MACE templates and links to the MACE/LAMMPS references.
 
 ## SCF Setup From Existing Structures
 

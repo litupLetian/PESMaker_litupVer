@@ -29,6 +29,8 @@ _REEXPORT_MODULES = (
     "pesmaker.results",
     "pesmaker.artifacts",
     "pesmaker.samplers.gpumd",
+    "pesmaker.samplers.lammps_mace",
+    "pesmaker.samplers",
     "pesmaker.samplers.selection",
     "pesmaker.labelers.vasp",
     "pesmaker.jobs.resources",

@@ -20,6 +20,9 @@ orchestration and compatibility layer.
   perturbations, generated-structure manifests, and generation summaries.
 - `pesmaker.samplers.gpumd`: GPUMD sampling folders, `run.in`, potential copy,
   and sampling submit scripts.
+- `pesmaker.samplers.lammps_mace`: LAMMPS-MACE sampling folders, `data.in`,
+  user LAMMPS input rendering, and sampling submit scripts.
+- `pesmaker.samplers`: sampling-engine dispatcher used by CLI and `next`.
 - `pesmaker.samplers.selection`: descriptors, farthest point selection, and
   diagnostic plots.
 - `pesmaker.parsers.ase`: ASE-backed frame reading and extxyz writing.

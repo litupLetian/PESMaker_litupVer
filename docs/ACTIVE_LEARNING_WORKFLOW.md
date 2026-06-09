@@ -36,9 +36,9 @@ Then it advances as far as it safely can.
 ```text
 No generated manifest -> generate structures
 Only generation configured -> write run.next.yaml and wait for settings
-Sampling configured   -> prepare GPUMD folders
+Sampling configured   -> prepare GPUMD or LAMMPS-MACE folders
 Need sampling jobs    -> write dry-run log and print submit command
-movie.xyz exists      -> select frames
+sampling trajectories -> select frames
 Need SCF jobs         -> write dry-run log and print submit command
 OUTCAR exists         -> collect train.xyz
 Training configured   -> prepare training folder and print submit command
@@ -104,7 +104,8 @@ PESMaker collects `train.xyz`.
 
 ## Sampling and Training Flow
 
-Use this when generated structures should first seed GPUMD MD sampling.
+Use this when generated structures should first seed GPUMD MD sampling or
+LAMMPS-MACE sampling with a MACE foundation model.
 
 YAML shape:
 
@@ -123,10 +124,10 @@ User loop:
 ```bash
 pesmaker validate run.yaml
 pesmaker next run.yaml
-# next prints: Submit GPUMD sampling jobs: pesmaker submit run.yaml --stage sampling
+# next prints: Submit sampling jobs: pesmaker submit run.yaml --stage sampling
 ```
 
-After GPUMD writes `movie.xyz`:
+After GPUMD writes `movie.xyz` or LAMMPS-MACE writes the configured trajectory:
 
 ```bash
 pesmaker next run.yaml

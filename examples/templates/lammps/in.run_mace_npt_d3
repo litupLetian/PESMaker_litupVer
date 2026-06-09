@@ -1,0 +1,43 @@
+units         metal
+dimension     3
+boundary      p p p
+atom_style    atomic
+atom_modify   map yes
+newton        on
+
+variable      ts         equal 0.001
+variable      Tstart     equal {temperature_start}
+variable      Tstop      equal {temperature_end}
+variable      Tdamp      equal ${ts}*100
+variable      Pdamp      equal ${ts}*1000
+variable      P_0        equal 0.0
+variable      dt_dump    equal 3000
+variable      dt_thermo  equal 1000
+
+read_data     {data_file}
+
+pair_style    hybrid/overlay &
+              mliap unified {potential} 0 &
+              dispersion/d3 bj pbe 12.0 6.0
+
+pair_coeff    * * mliap {elements}
+pair_coeff    * * dispersion/d3 {elements}
+
+dump          myDump all custom ${dt_dump} {trajectory} id element x y z
+dump_modify   myDump sort id element {elements}
+
+thermo_style  custom step time cpu pe ke etotal temp press vol density
+thermo        ${dt_thermo}
+thermo_modify lost ignore
+
+velocity      all create ${Tstart} 123456 mom yes rot yes dist gaussian
+
+# 3D orthogonal cell: independent x/y/z pressure control.
+fix           MD all npt temp ${Tstart} ${Tstop} ${Tdamp} &
+              x ${P_0} ${P_0} ${Pdamp} &
+              y ${P_0} ${P_0} ${Pdamp} &
+              z ${P_0} ${P_0} ${Pdamp} &
+              couple none
+
+timestep      ${ts}
+run           3000000

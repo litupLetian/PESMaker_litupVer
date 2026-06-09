@@ -47,7 +47,7 @@ Dry-run writes a log of the commands but does not call the scheduler.
 
 ```text
 SCF single-point jobs   : pesmaker submit run.yaml
-GPUMD sampling jobs     : pesmaker submit run.yaml --stage sampling
+MD sampling jobs        : pesmaker submit run.yaml --stage sampling
 NEP training jobs       : pesmaker submit run.yaml --stage training
 ```
 
@@ -91,6 +91,10 @@ For GPUMD sampling, PESMaker does not rewrite CPU resource directives in the
 provided sampling submit template. Keep GPU, partition, time, and any other
 cluster-specific settings in `templates/sbatch/gpumd.sh`.
 
+The same rule applies to LAMMPS-MACE sampling templates such as `lammps.sh`.
+PESMaker renders that script into every sampling job directory and keeps a
+`submit.sh` compatibility copy.
+
 For local server runs without a scheduler, use `bash` when you want the command
 to run in the foreground:
 
@@ -107,18 +111,32 @@ runs:
 bash gpumd.sh
 ```
 
+For MACE sampling with `sub_file: lammps.sh`, PESMaker runs:
+
+```bash
+bash lammps.sh
+```
+
 Use `nohup` when you want the local job to continue in the background:
 
 ```yaml
 jobs:
   submit_command: nohup
-  sub_file: gpumd.sh
+sub_file: gpumd.sh
 ```
+
+Use `sub_file: lammps.sh` for a local LAMMPS-MACE script.
 
 PESMaker then runs:
 
 ```bash
 nohup bash gpumd.sh > out 2>&1 &
+```
+
+For MACE with `sub_file: lammps.sh`, the command is:
+
+```bash
+nohup bash lammps.sh > out 2>&1 &
 ```
 
 The process runs in the background and writes its output to `out` inside that

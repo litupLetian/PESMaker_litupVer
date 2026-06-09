@@ -130,7 +130,7 @@ jobs:
     assert "Work done:" in output
     assert "Plan before execution" not in output
     assert "Inferred flow" not in output
-    assert "Submit GPUMD sampling jobs" in output
+    assert "Submit sampling jobs" in output
     assert "pesmaker submit" in output
     assert "--stage sampling" in output
 
@@ -138,7 +138,7 @@ jobs:
     output = capsys.readouterr().out
     assert "Current          : waiting for MD-sampling outputs" in output
     assert "Waiting:" in output
-    assert "GPUMD movie.xyz files are not ready." in output
+    assert "Sampling trajectory files are not ready." in output
     assert "--stage sampling" in output
 
     from ase import Atoms
@@ -167,6 +167,70 @@ jobs:
     assert all("selected" in record["source"] for record in records)
     assert "Submit SCF jobs" in output
     assert "pesmaker submit" in output
+
+
+def test_next_mace_sampling_previews_sampling_submit(
+    tmp_path,
+    monkeypatch,
+    capsys,
+):
+    """`next` should prepare and preview LAMMPS-MACE sampling jobs."""
+    structure = _write_structure(tmp_path)
+    run_template = tmp_path / "in.run_mace_npt"
+    run_template.write_text(
+        """read_data {data_file}
+pair_style mliap unified {potential} 0
+pair_coeff * * {elements}
+dump myDump all custom 3000 {trajectory} id element x y z
+""",
+        encoding="utf-8",
+    )
+    lammps_template = tmp_path / "lammps.sh"
+    lammps_template.write_text(
+        "#!/bin/bash\n/path/to/lmp -k on g 1 -sf kk -pk kokkos -in in.run_mace_npt\n",
+        encoding="utf-8",
+    )
+    config_path = tmp_path / "run.yaml"
+    config_path.write_text(
+        f"""project: mace_next
+structures:
+  - {structure.as_posix()}
+generation:
+  output_dir: generated
+sampling:
+  engine: mace
+  output_dir: sampling
+  potential: /models/mace-omat-0-small.model-mliap_lammps.pt
+  run_in: {run_template.as_posix()}
+  temperature: 300
+  selection:
+    trajectory_pattern: sampling/**/*.lammpstrj
+    output_dir: selected
+    descriptor: simple
+labeling:
+  output_dir: labeling
+jobs:
+  submit_command: nohup
+  sub_file: {lammps_template.as_posix()}
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+
+    assert main(["next", str(config_path)]) == 0
+    output = capsys.readouterr().out
+
+    workdir = tmp_path / "sampling" / "md_000000_temp_300K"
+    assert (workdir / "data.in").exists()
+    assert (workdir / "in.run_mace_npt").exists()
+    assert (workdir / "lammps.sh").exists()
+    assert (tmp_path / "sampling" / "sampling_submitted_jobs.txt").exists()
+    state_path = tmp_path / ".pesmaker" / "mace_next" / "next_state.json"
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    assert "sampling" in state["dry_runs"]
+    assert "Current          : MD-sampling submission preview" in output
+    assert "Submit sampling jobs" in output
+    assert "--stage sampling" in output
 
 
 def test_next_sampling_selection_without_labeling_writes_scf_template(
