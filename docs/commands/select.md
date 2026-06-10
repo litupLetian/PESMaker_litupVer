@@ -68,7 +68,10 @@ The descriptor model must be a native MACE model loadable by
 `MACECalculator`, not the `*.model-mliap_lammps.pt` file used by LAMMPS.
 PESMaker defaults to CUDA and all MACE interaction layers. It requests
 `invariants_only=True`, then averages atom descriptors separately for each
-element and concatenates them into one structure descriptor.
+element and concatenates them into one structure descriptor. This matches
+MACE's official fine-tuning FPS implementation. Invariant scalar channels are
+used because PESMaker applies ordinary Euclidean distance directly; including
+equivariant tensor components would require a rotation-aware metric.
 
 Install the required backend for the selected engine:
 

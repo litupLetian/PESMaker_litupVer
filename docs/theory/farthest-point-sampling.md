@@ -69,13 +69,25 @@ calculator.get_descriptors(
 )
 ```
 
-`invariants_only=True` is appropriate for FPS because the distance should not
-change when a physically identical environment is rotated. Equivariant
-components rotate with the structure and would introduce orientation-dependent
-distance. PESMaker uses every interaction layer, averages atom descriptors
-separately for each element, and concatenates those element vectors in atomic
-number order. This follows the structure-level descriptor construction used by
-MACE's own fine-tuning selection workflow.
+`invariants_only=True` is the appropriate default for PESMaker's FPS metric.
+MACE's \(L=0\) scalar channels are unchanged by rotation, while \(L>0\)
+channels transform with rotation. A plain Euclidean distance between flattened
+\(L>0\) components is preserved when the same rotation is applied to both
+structures, but not when two otherwise equivalent structures have independent
+orientations. FPS normally treats those rotated copies as the same structure,
+so PESMaker compares only the invariant channels.
+
+This does not mean equivariant descriptors can never be used for selection.
+They require a rotation-aware distance, alignment, or another invariant
+contraction before FPS. PESMaker currently uses direct Euclidean distance and
+does not implement such a metric.
+
+PESMaker uses every interaction layer, averages atom descriptors separately
+for each element, and concatenates those element vectors in atomic number
+order. MACE's official `fine_tuning_select.py` uses the same
+`get_descriptors(..., invariants_only=True)` call, performs per-element
+averaging, flattens the resulting structure descriptors, and passes them to
+FPS.
 
 NEP descriptors are atom-level descriptors. PESMaker converts them into one
 structure-level vector before FPS:
@@ -149,3 +161,5 @@ References:
 
 - [MACE descriptor extraction](https://mace-docs.readthedocs.io/en/latest/guide/descriptors.html)
 - [MACE ASE calculator](https://mace-docs.readthedocs.io/en/latest/guide/ase.html)
+- [MACE official FPS implementation](https://github.com/ACEsuit/mace/blob/main/mace/cli/fine_tuning_select.py)
+- [MACE equivariant representation paper](https://arxiv.org/abs/2206.07697)
