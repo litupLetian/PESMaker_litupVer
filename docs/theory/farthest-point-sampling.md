@@ -12,9 +12,15 @@ $$
 x_i \in \mathbb{R}^d
 $$
 
-where \(x_i\) is the descriptor for frame \(i\). In production active-learning
-runs, PESMaker can use Calorine NEP descriptors. For quick debugging,
-`descriptor: simple` uses a small geometry-based feature vector.
+where \(x_i\) is the descriptor for frame \(i\). PESMaker chooses the
+production descriptor from the sampling engine:
+
+- GPUMD sampling uses Calorine NEP descriptors calculated with the GPUMD
+  sampling potential.
+- MACE sampling uses invariant descriptors output by the native MACE model
+  configured as `sampling.selection.descriptor_model`.
+
+Users do not need to select the descriptor backend manually.
 
 FPS starts from one frame, then repeatedly selects the frame whose nearest
 distance to the already selected set is largest:
@@ -51,7 +57,37 @@ DFT calculations on frames that are nearly redundant in descriptor space.
 `max_count` is optional; if omitted, FPS keeps selecting until the distance rule
 stops it or all frames have been selected.
 
-## Descriptor Pooling
+## Descriptor Invariance And Pooling
+
+For MACE, PESMaker calls:
+
+```python
+calculator.get_descriptors(
+    atoms,
+    invariants_only=True,
+    num_layers=-1,
+)
+```
+
+`invariants_only=True` is the appropriate default for PESMaker's FPS metric.
+MACE's \(L=0\) scalar channels are unchanged by rotation, while \(L>0\)
+channels transform with rotation. A plain Euclidean distance between flattened
+\(L>0\) components is preserved when the same rotation is applied to both
+structures, but not when two otherwise equivalent structures have independent
+orientations. FPS normally treats those rotated copies as the same structure,
+so PESMaker compares only the invariant channels.
+
+This does not mean equivariant descriptors can never be used for selection.
+They require a rotation-aware distance, alignment, or another invariant
+contraction before FPS. PESMaker currently uses direct Euclidean distance and
+does not implement such a metric.
+
+PESMaker uses every interaction layer, averages atom descriptors separately
+for each element, and concatenates those element vectors in atomic number
+order. MACE's official `fine_tuning_select.py` uses the same
+`get_descriptors(..., invariants_only=True)` call, performs per-element
+averaging, flattens the resulting structure descriptors, and passes them to
+FPS.
 
 NEP descriptors are atom-level descriptors. PESMaker converts them into one
 structure-level vector before FPS:
@@ -71,15 +107,31 @@ Minimal selection settings:
 
 ```yaml
 sampling:
+  engine: gpumd
+  potential: /path/to/nep.txt
   selection:
     trajectory_pattern: sampling/**/movie.xyz
     output_dir: selected
-    descriptor: calorine
-    potential: /path/to/nep.txt
     min_distance: 0.2
     max_count: 200  # optional cap
     plot: true
 ```
+
+For MACE:
+
+```yaml
+sampling:
+  engine: mace
+  selection:
+    trajectory_pattern: sampling/**/*.lammpstrj
+    output_dir: selected
+    descriptor_model: /path/to/native-mace.model
+    min_distance: 0.0
+    max_count: 200
+```
+
+The MACE descriptor model is the native model loaded by ASE. It is separate
+from the MLIAP-exported model used by LAMMPS.
 
 Run:
 
@@ -104,3 +156,10 @@ different selection thresholds, and check whether the descriptor space separates
 physically distinct MD regions. The selected structures themselves are stored in
 the combined `selected/selected.xyz`; the manifest records which frames were
 kept and lets later SCF setup split them into single-point jobs.
+
+References:
+
+- [MACE descriptor extraction](https://mace-docs.readthedocs.io/en/latest/guide/descriptors.html)
+- [MACE ASE calculator](https://mace-docs.readthedocs.io/en/latest/guide/ase.html)
+- [MACE official FPS implementation](https://github.com/ACEsuit/mace/blob/main/mace/cli/fine_tuning_select.py)
+- [MACE equivariant representation paper](https://arxiv.org/abs/2206.07697)
