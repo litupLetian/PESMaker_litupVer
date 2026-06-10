@@ -12,7 +12,7 @@ MD_sampling:
   output_dir: sampling
   gpumd_dir: /home/tingliang/software/GPUMD/GPUMD-master-26-05-2026/src
   temperatures: ["300-1200"]
-  run_steps: 3000000
+  run_steps: 1000000
   ensemble_mode: auto
   selection:
     trajectory_pattern: sampling/**/movie.xyz

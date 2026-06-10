@@ -1867,13 +1867,15 @@ sampling:
         "50 50 50 50 50 50 1000"
     ) in triclinic
     assert (
-        "ensemble       npt_scr 300 300 100 0 0 0 50 50 200 1000"
+        "ensemble       npt_scr 300 300 100 0 0 0 50 50 500 1000"
         in two_dimensional
     )
     assert (
         "ensemble       npt_scr 300 300 100 0 0 0 0 0 0 "
-        "50 50 200 200 200 50 1000"
+        "50 50 500 500 500 50 1000"
     ) in two_dimensional_triclinic
+    assert "dump_position  1000" in two_dimensional_triclinic
+    assert "run            1000000" in two_dimensional_triclinic
 
 
 def test_sampling_setup_respects_run_steps_and_forced_gpumd_cell_mode(tmp_path):

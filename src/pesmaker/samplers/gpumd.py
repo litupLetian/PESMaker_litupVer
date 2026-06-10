@@ -42,11 +42,11 @@ velocity       300
 ensemble       npt_scr 300 300 100 0 0 0 50 50 50 1000
 time_step      1
 dump_thermo    1000
-dump_position  3000
+dump_position  1000
 run            {run_steps}
 """
 
-DEFAULT_GPUMD_RUN_STEPS = 3000000
+DEFAULT_GPUMD_RUN_STEPS = 1000000
 
 DEFAULT_GPUMD_DIR = Path("/home/tingliang/software/GPUMD/GPUMD-master-26-05-2026/src")
 
@@ -62,7 +62,7 @@ DEFAULT_GPUMD_PRESSURE_COUPLING = 1000.0
 
 DEFAULT_GPUMD_ORTHOGONAL_ELASTIC = (50.0, 50.0, 50.0)
 
-DEFAULT_GPUMD_2D_ELASTIC = (50.0, 50.0, 200.0)
+DEFAULT_GPUMD_2D_ELASTIC = (50.0, 50.0, 500.0)
 
 DEFAULT_GPUMD_TRICLINIC_ELASTIC = (50.0, 50.0, 50.0, 50.0, 50.0, 50.0)
 
@@ -365,7 +365,7 @@ def _default_2d_triclinic_elastic(options: dict[str, Any], atoms) -> tuple[float
     if axis is None:
         axis = 2
     for index in _triclinic_elastic_indices_for_axis(axis):
-        values[index] = 200.0
+        values[index] = 500.0
     return tuple(values)
 
 
