@@ -54,6 +54,16 @@ count unless `sampling.run_steps` is explicitly set in the YAML. For
 non-orthogonal cells, PESMaker adjusts `ensemble npt_scr` to the triclinic
 format and prints a short warning.
 
+Without a custom `run_in`, the GPUMD defaults are `time_step 1`,
+`dump_thermo 1000`, `dump_position 1000`, and `run 1000000`. For an `x-y`
+two-dimensional material, the default `npt_scr` elastic values are
+`50 50 500` for an orthogonal cell and
+`50 50 500 500 500 50` for a triclinic cell. In the triclinic order
+`C_xx C_yy C_zz C_yz C_xz C_xy`, the value `500` is applied to every
+component involving the vacuum `z` direction. Set
+`sampling.elastic_constants` or provide your own `run_in` to override these
+values.
+
 Set `sampling.preserve_run_in: true` when you want PESMaker to copy your GPUMD
 `run_in` exactly as written. In that mode PESMaker still prepares `model.xyz`,
 potential files, manifests, and submit scripts, but it does not change

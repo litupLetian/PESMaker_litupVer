@@ -4,5 +4,5 @@ velocity       {temperature_start}
 ensemble       npt_scr {temperature_start} {temperature_end} 100 0 0 0 50 50 50 1000
 time_step      1
 dump_thermo    1000
-dump_position  3000
+dump_position  1000
 run            {run_steps}
