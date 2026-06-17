@@ -132,6 +132,12 @@ PESMaker no longer writes one `selected_000000.xyz` file per frame. SCF setup
 uses `selected/manifest.jsonl` to split frames from `selected.xyz` when it
 prepares single-point job folders.
 
+The manifest `descriptor` field records the descriptor family used for FPS:
+`nep89` for GPUMD runs with a `nep89*` potential, `nep` for other GPUMD NEP
+potentials, `mace` for MACE descriptors, and `simple` for the geometry fallback.
+For GPUMD, Calorine is still the calculation backend; it is not written as the
+descriptor family.
+
 `selection_features.npy` is a NumPy array with shape
 `(number_of_md_frames, descriptor_dimension)`. Row `i` is the descriptor vector
 used for MD frame `i` before FPS selection. It is useful for debugging and

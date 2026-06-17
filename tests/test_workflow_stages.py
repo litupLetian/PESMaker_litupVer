@@ -2284,6 +2284,16 @@ def test_selection_warning_suggests_lower_min_distance():
     assert _suggest_lower_min_distance(0.005) == "0.003"
 
 
+def test_gpumd_manifest_descriptor_name_follows_nep_potential():
+    """Selection manifests should record the NEP family, not Calorine backend."""
+    from pesmaker.samplers.selection import _nep_descriptor_name
+
+    assert _nep_descriptor_name("nep89_20250409.txt") == "nep89"
+    assert _nep_descriptor_name("nep89.txt") == "nep89"
+    assert _nep_descriptor_name("nep.txt") == "nep"
+    assert _nep_descriptor_name("custom_nep.txt") == "nep"
+
+
 def test_scf_setup_reads_selected_frames_from_combined_xyz(tmp_path, monkeypatch):
     """SCF setup should split selected.xyz frames using manifest frame_index."""
     from ase import Atoms
@@ -2414,7 +2424,7 @@ sampling:
     assert "3/3 frame(s) (100.0%)" in output
     assert "Descriptor matrix: 3 frame(s) x 2 feature(s)" in output
     assert "FPS completed    : Selected 2 of 3 frame(s)." in output
-    assert "using NEP descriptors calculated from the GPUMD potential" in output
+    assert "using NEP89 descriptors calculated from the GPUMD potential" in output
     records = [
         json.loads(line)
         for line in (selected_dir / "manifest.jsonl").read_text(
@@ -2422,7 +2432,7 @@ sampling:
         ).splitlines()
     ]
     assert [record["source_frame"] for record in records] == [0, 2]
-    assert {record["descriptor"] for record in records} == {"calorine"}
+    assert {record["descriptor"] for record in records} == {"nep89"}
 
 
 def test_mace_select_uses_invariant_model_descriptors_by_default(

@@ -47,7 +47,7 @@ def select_sampling_frames(config: PESMakerConfig) -> StageResult:
 
     frames = _read_trajectory_frames(pattern)
     sampling_options = {"engine": config.sampling.engine, **config.sampling.options}
-    features, descriptor_backend = _selection_features(
+    features, descriptor_name = _selection_features(
         frames,
         options,
         sampling_options=sampling_options,
@@ -84,7 +84,7 @@ def select_sampling_frames(config: PESMakerConfig) -> StageResult:
                         "frame_index": index,
                         "path": str(selected_path),
                         "atom_count": len(atoms),
-                        "descriptor": descriptor_backend,
+                        "descriptor": descriptor_name,
                         "selection_distance": distance,
                     }
                 )
@@ -103,7 +103,7 @@ def select_sampling_frames(config: PESMakerConfig) -> StageResult:
         tuple(files),
         (
             f"Selected {len(selected)} of {len(frames)} MD frame(s) using "
-            f"{_selection_descriptor_label(descriptor_backend)}"
+            f"{_selection_descriptor_label(descriptor_name)}"
         ),
         warnings=tuple(
             _selection_limit_warnings(
@@ -175,9 +175,9 @@ def _selection_features(
             potential_options["potential"] = selection_potential
         potential = _resolve_sampling_potential_path(potential_options)
         if potential is not None and potential.exists():
-            potential = str(potential.resolve())
+            potential = potential.resolve()
         features = _calorine_nep_structure_features(frames, potential, options)
-        return features, "calorine"
+        return features, _nep_descriptor_name(potential)
     if descriptor in {"mace", "mace-descriptor", "mace_descriptor"}:
         features = _mace_structure_features(
             frames,
@@ -202,9 +202,18 @@ def _default_selection_descriptor(sampling_options: dict[str, Any]) -> str:
 def _selection_descriptor_label(descriptor_backend: str) -> str:
     if descriptor_backend == "mace":
         return "invariant descriptors output by the MACE model"
-    if descriptor_backend == "calorine":
+    if descriptor_backend == "nep89":
+        return "NEP89 descriptors calculated from the GPUMD potential"
+    if descriptor_backend == "nep":
         return "NEP descriptors calculated from the GPUMD potential"
     return "the simple geometry descriptor"
+
+
+def _nep_descriptor_name(potential: Any) -> str:
+    name = Path(str(potential)).name.lower()
+    if name.startswith("nep89"):
+        return "nep89"
+    return "nep"
 
 
 def _calorine_nep_structure_features(
