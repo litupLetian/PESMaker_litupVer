@@ -244,7 +244,7 @@ jobs:
     assert "KPAR =" not in incar_text
     assert "NCORE =" not in incar_text
     assert f'cd "{workdir}"' not in submit_text
-    assert "#SBATCH --job-name=structure_000000" in submit_text
+    assert "#SBATCH --job-name=mp105_Te_str000000" in submit_text
     assert "mpirun -np 36 /opt/vasp/vasp_std" in submit_text
 
 
@@ -391,7 +391,7 @@ jobs:
 
 
 def test_labeling_setup_preserves_literal_submit_template_with_resources(tmp_path):
-    """Literal user submit scripts should stay untouched without placeholders."""
+    """Literal user submit scripts should keep resources and commands untouched."""
     generated_dir = tmp_path / "generated"
     source_dir = generated_dir / "mp-105_Te"
     source_dir.mkdir(parents=True)
@@ -435,7 +435,11 @@ jobs:
     assert main(["scf-setup", str(config_path)]) == 0
 
     workdir = tmp_path / "labeling" / "mp-105_Te" / "perturb_000000"
-    assert (workdir / "submit.sh").read_text(encoding="utf-8") == template_text
+    expected_text = template_text.replace(
+        "#SBATCH --job-name=VASP-CPU",
+        "#SBATCH --job-name=mp105_Te_p000000",
+    )
+    assert (workdir / "submit.sh").read_text(encoding="utf-8") == expected_text
 
 
 def test_labeling_setup_fills_submit_template_placeholders_with_resources(
@@ -483,7 +487,7 @@ jobs:
 
     workdir = tmp_path / "labeling" / "mp-105_Te" / "perturb_000000"
     submit_text = (workdir / "submit.sh").read_text(encoding="utf-8")
-    assert "#SBATCH --job-name=perturb_000000" in submit_text
+    assert "#SBATCH --job-name=mp105_Te_p000000" in submit_text
     assert "#SBATCH --ntasks=36              # total MPI ranks" in submit_text
     assert "mpirun -np 36 /opt/vasp/vasp_std" in submit_text
 
@@ -491,7 +495,7 @@ jobs:
 def test_labeling_setup_preserves_literal_submit_template_without_resources(
     tmp_path,
 ):
-    """Literal user submit scripts should stay untouched without resource fields."""
+    """Literal user submit scripts should only refresh job names by default."""
     generated_dir = tmp_path / "generated"
     source_dir = generated_dir / "mp-105_Te"
     source_dir.mkdir(parents=True)
@@ -528,7 +532,93 @@ jobs:
     assert main(["scf-setup", str(config_path)]) == 0
 
     workdir = tmp_path / "labeling" / "mp-105_Te" / "perturb_000000"
-    assert (workdir / "submit.sh").read_text(encoding="utf-8") == template_text
+    expected_text = template_text.replace(
+        "#SBATCH --job-name=manual_vasp",
+        "#SBATCH --job-name=mp105_Te_p000000",
+    )
+    assert (workdir / "submit.sh").read_text(encoding="utf-8") == expected_text
+
+
+def test_labeling_setup_refreshes_short_sbatch_job_name(tmp_path):
+    """The short -J job-name directive should also be refreshed."""
+    generated_dir = tmp_path / "generated"
+    source_dir = generated_dir / "mp-105_Te"
+    source_dir.mkdir(parents=True)
+    source_path = source_dir / "perturb_000000.vasp"
+    source_path.write_text(
+        "Te\n1.0\n1 0 0\n0 1 0\n0 0 1\nTe\n1\nDirect\n0 0 0\n",
+        encoding="utf-8",
+    )
+    (generated_dir / "manifest.jsonl").write_text(
+        json.dumps({"path": str(source_path)}) + "\n",
+        encoding="utf-8",
+    )
+    sub_file = tmp_path / "sub.sh"
+    sub_file.write_text(
+        "#!/bin/bash\n#SBATCH -J VASP-CPU # queue name\nmpirun /cluster/vasp_std\n",
+        encoding="utf-8",
+    )
+    config_path = tmp_path / "pesmaker.yaml"
+    config_path.write_text(
+        f"""project: refresh_short_job_name_test
+generation:
+  output_dir: {generated_dir.as_posix()}
+labeling:
+  output_dir: {(tmp_path / 'labeling').as_posix()}
+  command: /new/vasp_std
+jobs:
+  sub_file: {sub_file.as_posix()}
+""",
+        encoding="utf-8",
+    )
+
+    assert main(["scf-setup", str(config_path)]) == 0
+
+    workdir = tmp_path / "labeling" / "mp-105_Te" / "perturb_000000"
+    submit_text = (workdir / "submit.sh").read_text(encoding="utf-8")
+    assert "#SBATCH -J mp105_Te_p000000 # queue name" in submit_text
+    assert "mpirun /cluster/vasp_std" in submit_text
+
+
+def test_labeling_setup_uses_compact_selected_job_name(tmp_path):
+    """Selected AIMD folders should get compact but identifiable job names."""
+    input_dir = tmp_path / "selected"
+    source_dir = input_dir / "mp-1186427_Pd_temp_300K"
+    source_dir.mkdir(parents=True)
+    source_path = source_dir / "selected_000000.xyz"
+    source_path.write_text(
+        '1\nLattice="1 0 0 0 1 0 0 0 1" Properties=species:S:1:pos:R:3\n'
+        "Pd 0 0 0\n",
+        encoding="utf-8",
+    )
+    sub_file = tmp_path / "sub.sh"
+    sub_file.write_text(
+        "#!/bin/bash\n#SBATCH --job-name=VASP-CPU\nmpirun /cluster/vasp_std\n",
+        encoding="utf-8",
+    )
+    config_path = tmp_path / "pesmaker.yaml"
+    config_path.write_text(
+        f"""project: compact_selected_job_name_test
+labeling:
+  engine: vasp
+  input_dir: {input_dir.as_posix()}
+  output_dir: {(tmp_path / 'labeling').as_posix()}
+jobs:
+  sub_file: {sub_file.as_posix()}
+""",
+        encoding="utf-8",
+    )
+
+    assert main(["scf-setup", str(config_path)]) == 0
+
+    submit_text = (
+        tmp_path
+        / "labeling"
+        / "mp-1186427_Pd_temp_300K"
+        / "selected_000000"
+        / "submit.sh"
+    ).read_text(encoding="utf-8")
+    assert "#SBATCH --job-name=mp1186427_Pd_sel000000" in submit_text
 
 
 def test_labeling_setup_uses_exact_command_placeholder_without_resources(
@@ -1438,7 +1528,7 @@ jobs:
     assert (complete / "submit.sh").read_text(encoding="utf-8") == old_script
     for workdir in (not_converged, incomplete, not_started):
         submit_text = (workdir / "submit.sh").read_text(encoding="utf-8")
-        assert f"#SBATCH --job-name={workdir.name}" in submit_text
+        assert f"#SBATCH --job-name={workdir.parent.name}_{workdir.name}" in submit_text
         assert "#SBATCH --ntasks=36" in submit_text
         assert "mpirun -np 36 /new/vasp_std" in submit_text
         assert "#SBATCH --partition=old" not in submit_text

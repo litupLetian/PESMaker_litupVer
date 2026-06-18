@@ -114,13 +114,36 @@ script-refresh setting is present, PESMaker submits the existing `submit.sh`
 without rewriting it.
 
 When `jobs.sub_file` is provided, PESMaker does not scan and rewrite literal
-`#SBATCH` lines or literal VASP command lines. It only replaces explicit
-placeholders such as `{command}`, `{job_name}`, `{workdir}`, `{nodes}`,
-`{ntasks}`, `{cores_cpu}`, `{gpus}`, `{vasp_kpar}`, and `{vasp_ncore}`. If the
-template does not contain `{command}`, the command line in the user script is
-left unchanged. If resource fields such as `cores_cpu`, `nodes`, or `gpus` are
-present, they affect the replacement value of `{command}` and the corresponding
-resource placeholders.
+resource directives such as `#SBATCH --ntasks` or literal VASP command lines.
+It only replaces explicit placeholders such as `{command}`, `{job_name}`,
+`{workdir}`, `{nodes}`, `{ntasks}`, `{cores_cpu}`, `{gpus}`, `{vasp_kpar}`, and
+`{vasp_ncore}`. As a convenience, PESMaker does update literal
+`#SBATCH --job-name=...` and `#SBATCH -J ...` lines to the calculation folder
+name so queued jobs are easier to identify. For nested SCF folders, the queue
+name uses a compact parent/folder marker, for example
+`mp-1186427_Pd_temp_300K/selected_000000` becomes
+`mp1186427_Pd_sel000000`. If the template does not contain
+`{command}`, the command line in the user script is left unchanged. If resource
+fields such as `cores_cpu`, `nodes`, or `gpus` are present, they affect the
+replacement value of `{command}` and the corresponding resource placeholders.
+
+To let PESMaker add MPI ranks from the YAML, put `{command}` in the submit
+template where VASP should run. For example, with `cores_cpu: 36` and
+`command: /path/to/vasp_std`, this template line:
+
+```bash
+{command}
+```
+
+is rendered as:
+
+```bash
+mpirun -np 36 /path/to/vasp_std
+```
+
+If the template instead contains a literal line such as
+`mpirun /path/to/vasp_std`, PESMaker keeps that line unchanged and does not add
+`-np 36`.
 
 For CPU VASP jobs with `cores_cpu` or `nodes` set, refreshed launch commands
 use `mpirun -np <nodes * cores_cpu>`. If `labeling.command` already starts with
@@ -231,6 +254,12 @@ Put `{command}` where PESMaker should insert the VASP launch command. Without
 
 ```bash
 {command}
+```
+
+With `gpus: 1`, this becomes:
+
+```bash
+mpirun -np 1 /data/software/vasp6.4-gpu/bin/vasp_std
 ```
 
 For GPU VASP jobs, omit `vasp_kpar` and `vasp_ncore` unless you intentionally
