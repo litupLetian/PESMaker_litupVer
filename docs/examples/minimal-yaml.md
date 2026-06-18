@@ -95,6 +95,10 @@ jobs:
   sub_file: templates/sbatch/vasp_cpu_36.sh
 ```
 
+Put `{command}` in `templates/sbatch/vasp_cpu_36.sh` where VASP should run if
+you want PESMaker to render `mpirun -np 36 /path/to/vasp_std`. If the script
+contains a literal `mpirun /path/to/vasp_std` line, PESMaker keeps it unchanged.
+
 Run:
 
 ```bash

@@ -18,6 +18,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -32,6 +33,7 @@ SUBMIT_RESOURCE_KEYS = {
     "vasp_kpar",
     "vasp_ncore",
 }
+MAX_SUBMIT_JOB_NAME_LENGTH = 48
 
 
 def _write_submit_script(
@@ -43,7 +45,7 @@ def _write_submit_script(
     resources: JobResources | None = None,
 ) -> Path:
     template_path = _job_template_path(config, stage)
-    job_name = workdir.name
+    job_name = _submit_job_name(workdir)
     resources = resources or _job_resources(config)
     engine = _stage_engine(config, stage)
     mpi_ranks = _requested_mpi_ranks(config, resources)
@@ -76,6 +78,8 @@ def _write_submit_script(
                 "vasp_ncore": resources.vasp_ncore,
             },
         )
+        if not _preserve_user_submit_template(stage, engine):
+            text = _replace_sbatch_job_name(text, job_name)
     else:
         text = _default_submit_script(
             command=command,
@@ -177,6 +181,78 @@ def _format_submit_template(text: str, values: dict[str, object]) -> str:
     for key, value in values.items():
         text = text.replace(f"{{{key}}}", str(value))
     return text
+
+
+def _submit_job_name(workdir: Path) -> str:
+    parts = [_compact_submit_job_name_part(workdir.name)]
+    if workdir.parent.name:
+        parts.insert(0, _compact_submit_job_name_part(workdir.parent.name))
+    return _trim_submit_job_name("_".join(part for part in parts if part))
+
+
+def _compact_submit_job_name_part(name: str) -> str:
+    mp_match = re.match(r"^(mp)-(\d+)(?:_([A-Za-z][A-Za-z0-9]*))?", name)
+    if mp_match:
+        material = f"{mp_match.group(1)}{mp_match.group(2)}"
+        if mp_match.group(3):
+            material = f"{material}_{mp_match.group(3)}"
+        return material
+
+    frame_match = re.match(r"^(selected|structure|perturb)_(\d+)$", name)
+    if frame_match:
+        prefix = {
+            "selected": "sel",
+            "structure": "str",
+            "perturb": "p",
+        }[frame_match.group(1)]
+        return f"{prefix}{frame_match.group(2)}"
+
+    sanitized = re.sub(r"[^A-Za-z0-9_.-]+", "_", name).strip("_")
+    return re.sub(r"_+", "_", sanitized)
+
+
+def _trim_submit_job_name(job_name: str) -> str:
+    if len(job_name) <= MAX_SUBMIT_JOB_NAME_LENGTH:
+        return job_name
+    head_length = MAX_SUBMIT_JOB_NAME_LENGTH - 17
+    return f"{job_name[:head_length]}_{job_name[-16:]}"
+
+
+def _replace_sbatch_job_name(text: str, job_name: str) -> str:
+    return "".join(
+        _replace_sbatch_job_name_line(line, job_name)
+        for line in text.splitlines(keepends=True)
+    )
+
+
+def _replace_sbatch_job_name_line(line: str, job_name: str) -> str:
+    line_body = line.rstrip("\r\n")
+    line_ending = line[len(line_body) :]
+    prefix = line_body[: len(line_body) - len(line_body.lstrip())]
+    stripped = line_body.lstrip()
+    if not stripped.startswith("#SBATCH"):
+        return line
+    rest = stripped[len("#SBATCH") :].lstrip()
+    if rest.startswith("--job-name="):
+        suffix = _directive_suffix(rest[len("--job-name=") :])
+        return f"{prefix}#SBATCH --job-name={job_name}{suffix}{line_ending}"
+    if rest == "--job-name" or rest.startswith("--job-name "):
+        suffix = _directive_suffix(rest[len("--job-name") :].lstrip())
+        return f"{prefix}#SBATCH --job-name={job_name}{suffix}{line_ending}"
+    if rest.startswith("-J="):
+        suffix = _directive_suffix(rest[len("-J=") :])
+        return f"{prefix}#SBATCH -J {job_name}{suffix}{line_ending}"
+    if rest == "-J" or rest.startswith("-J "):
+        suffix = _directive_suffix(rest[len("-J") :].lstrip())
+        return f"{prefix}#SBATCH -J {job_name}{suffix}{line_ending}"
+    return line
+
+
+def _directive_suffix(value_text: str) -> str:
+    comment_index = value_text.find(" #")
+    if comment_index >= 0:
+        return value_text[comment_index:]
+    return ""
 
 
 def _default_submit_script(
