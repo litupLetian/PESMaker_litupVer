@@ -47,9 +47,10 @@ labeled extended xyz format.
 
 The second line of each frame contains `Lattice`, `Energy`,
 `Properties=species:S:1:pos:R:3:force:R:3`, optional `Virial`, `pbc`,
-`Config_type`, and optional `weight`. It also writes a tab-separated summary
-with frame counts grouped by the closest ancestor directory containing
-`sub.yaml` and the first child directory below it.
+`Config_type`, and optional `weight`. It also writes a plain text summary report
+with collected counts and skipped nonconverged OUTCAR counts, grouped by the
+closest ancestor directory containing `sub.yaml` and the first child directory
+below it.
 
 By default, `check_scf_convergence` is `true`, so OUTCAR files containing VASP's
 electronic self-consistency failure marker are skipped. `include_virial: false`
@@ -75,7 +76,7 @@ becomes `Config_type=1.Te_1.Material_project_structure_mp-105_Te`.
 
 ```text
 train.xyz
-train_collection_summary.tsv
+train_collection_summary.txt
 ```
 
 The command also prints a structure count table:
@@ -106,8 +107,9 @@ Total structures : 464
 Train structures : 464
 Test structures  : 0
 Train dataset    : train.xyz
-Summary          : train_collection_summary.tsv
+Summary          : train_collection_summary.txt
 VDW/MBD detected : no (464/464 OUTCAR files use the standard virial block)
+Nonconverged OUTCAR skipped : 0
 ```
 
 or the path set by:
