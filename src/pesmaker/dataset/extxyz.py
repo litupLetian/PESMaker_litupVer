@@ -66,15 +66,19 @@ def collect_labeled_dataset(config: PESMakerConfig) -> StageResult:
 
     frames: list[LabeledFrame] = []
     collection_records: list[tuple[Path, int]] = []
+    nonconverged_records: list[Path] = []
+    unreadable_records: list[Path] = []
     warnings: list[str] = []
     check_scf_convergence = _check_scf_convergence(config)
     for output in outputs:
         if check_scf_convergence and _outcar_is_nonconverged(output):
+            nonconverged_records.append(output)
             warnings.append(f"Skipped nonconverged VASP OUTCAR: {output}")
             continue
         try:
             frame = _read_vasp_labeled_frame(output, config.labeling.options)
         except ValueError as exc:
+            unreadable_records.append(output)
             warnings.append(f"Skipped unreadable VASP OUTCAR: {output} ({exc})")
             continue
         frames.append(frame)
@@ -94,11 +98,17 @@ def collect_labeled_dataset(config: PESMakerConfig) -> StageResult:
         str(
             config.labeling.options.get(
                 "summary_path",
-                output_path.with_name(f"{output_path.stem}_collection_summary.tsv"),
+                output_path.with_name(f"{output_path.stem}_collection_summary.txt"),
             )
         )
     )
-    _write_collection_summary(summary_path, collection_records)
+    _write_collection_summary(
+        summary_path,
+        collected_records=collection_records,
+        nonconverged_records=nonconverged_records,
+        unreadable_records=unreadable_records,
+        matched_count=len(outputs),
+    )
     files.append(summary_path)
     return StageResult(
         output_dir,
@@ -109,7 +119,8 @@ def collect_labeled_dataset(config: PESMakerConfig) -> StageResult:
             test_path=test_path,
             test_count=len(test_frames),
             summary_path=summary_path,
-            skipped_count=len(warnings),
+            nonconverged_count=len(nonconverged_records),
+            unreadable_count=len(unreadable_records),
             config_type_counts=_config_type_counts(frames),
             virial_offset_counts=_virial_offset_counts(frames),
         ),
@@ -471,7 +482,8 @@ def _collection_message(
     test_path: Path,
     test_count: int,
     summary_path: Path,
-    skipped_count: int,
+    nonconverged_count: int,
+    unreadable_count: int,
     config_type_counts: dict[str, int],
     virial_offset_counts: dict[int, int],
 ) -> str:
@@ -502,8 +514,9 @@ def _collection_message(
     lines.append(f"Summary          : {summary_path}")
     if virial_offset_counts:
         lines.append(_vdw_summary_line(virial_offset_counts))
-    if skipped_count:
-        lines.append(f"Skipped OUTCAR   : {skipped_count}")
+    lines.append(f"Nonconverged OUTCAR skipped : {nonconverged_count}")
+    if unreadable_count:
+        lines.append(f"Unreadable OUTCAR skipped   : {unreadable_count}")
     return "\n".join(lines)
 
 
@@ -554,9 +567,56 @@ def _vdw_summary_line(counts: dict[int, int]) -> str:
 
 def _write_collection_summary(
     path: Path,
-    records: list[tuple[Path, int]],
+    *,
+    collected_records: list[tuple[Path, int]],
+    nonconverged_records: list[Path],
+    unreadable_records: list[Path],
+    matched_count: int,
 ) -> None:
-    """Write frame counts grouped by nearest sub.yaml directory and child path."""
+    """Write a human-readable collection report."""
+    collected_grouped = _group_collected_records(collected_records)
+    nonconverged_grouped = _group_path_records(nonconverged_records)
+    unreadable_grouped = _group_path_records(unreadable_records)
+    collected_count = sum(counts["outcars"] for counts in collected_grouped.values())
+    frame_count = sum(counts["frames"] for counts in collected_grouped.values())
+
+    lines = [
+        "PESMaker collection summary",
+        "",
+        "Totals",
+        f"  OUTCAR files matched          : {matched_count}",
+        f"  OUTCAR files collected        : {collected_count}",
+        f"  Structures written            : {frame_count}",
+        f"  Nonconverged OUTCAR skipped   : {len(nonconverged_records)}",
+        f"  Unreadable OUTCAR skipped     : {len(unreadable_records)}",
+        "",
+        "Collected structures by source",
+    ]
+    lines.extend(_format_grouped_counts(collected_grouped, include_frames=True))
+    if nonconverged_records:
+        lines.extend(
+            [
+                "",
+                "Nonconverged OUTCAR by source",
+                *_format_grouped_counts(nonconverged_grouped, include_frames=False),
+            ]
+        )
+    if unreadable_records:
+        lines.extend(
+            [
+                "",
+                "Unreadable OUTCAR by source",
+                *_format_grouped_counts(unreadable_grouped, include_frames=False),
+            ]
+        )
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _group_collected_records(
+    records: list[tuple[Path, int]],
+) -> dict[tuple[str, str], dict[str, int]]:
     grouped: dict[tuple[str, str], dict[str, int]] = {}
     for outcar, frame_count in records:
         sub_yaml_dir = _nearest_sub_yaml_dir(outcar)
@@ -571,21 +631,32 @@ def _write_collection_summary(
         item = grouped.setdefault(key, {"outcars": 0, "frames": 0})
         item["outcars"] += 1
         item["frames"] += frame_count
+    return grouped
 
-    path.parent.mkdir(parents=True, exist_ok=True)
-    lines = ["sub_yaml_dir\tchild_dir\toutcar_count\tframe_count"]
+
+def _group_path_records(paths: list[Path]) -> dict[tuple[str, str], dict[str, int]]:
+    return _group_collected_records([(path, 0) for path in paths])
+
+
+def _format_grouped_counts(
+    grouped: dict[tuple[str, str], dict[str, int]],
+    *,
+    include_frames: bool,
+) -> list[str]:
+    if not grouped:
+        return ["  none"]
+    lines = []
     for (sub_yaml_dir, child_dir), counts in sorted(grouped.items()):
-        lines.append(
-            "\t".join(
-                [
-                    sub_yaml_dir,
-                    child_dir,
-                    str(counts["outcars"]),
-                    str(counts["frames"]),
-                ]
-            )
+        lines.extend(
+            [
+                f"  - sub.yaml directory : {sub_yaml_dir}",
+                f"    child directory    : {child_dir}",
+                f"    OUTCAR files       : {counts['outcars']}",
+            ]
         )
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        if include_frames:
+            lines.append(f"    structures         : {counts['frames']}")
+    return lines
 
 
 def _nearest_sub_yaml_dir(path: Path) -> Path | None:

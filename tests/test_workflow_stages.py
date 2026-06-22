@@ -61,15 +61,15 @@ def test_collect_writes_summary_grouped_by_sub_yaml_child_dir(tmp_path, monkeypa
         """project: collect_stats
 labeling:
   dataset_path: train.xyz
-  summary_path: stats.tsv
+  summary_path: stats.txt
 """,
         encoding="utf-8",
     )
 
     result = collect_labeled_dataset(load_config(config_path))
-    summary = (tmp_path / "stats.tsv").read_text(encoding="utf-8")
+    summary = (tmp_path / "stats.txt").read_text(encoding="utf-8")
 
-    assert result.files == (Path("train.xyz"), Path("stats.tsv"))
+    assert result.files == (Path("train.xyz"), Path("stats.txt"))
     train_text = (tmp_path / "train.xyz").read_text(encoding="utf-8")
     assert 'Virial="' in train_text
     assert "Config_type=1.Te_1.Material_project_structure_mp-1" in train_text
@@ -82,10 +82,17 @@ labeling:
     assert "Train structures : 3" in result.message
     assert "VDW/MBD detected : yes" in result.message
     assert "3/3 OUTCAR files use the extra VDW/MBD virial line" in result.message
+    assert "Nonconverged OUTCAR skipped : 0" in result.message
     root_a_label = root_a.relative_to(tmp_path).as_posix()
     root_b_label = root_b.relative_to(tmp_path).as_posix()
-    assert f"{root_a_label}\trun_vasp_scf\t2\t2" in summary
-    assert f"{root_b_label}\trun_vasp_scf\t1\t1" in summary
+    assert "PESMaker collection summary" in summary
+    assert "OUTCAR files matched          : 3" in summary
+    assert "Nonconverged OUTCAR skipped   : 0" in summary
+    assert f"  - sub.yaml directory : {root_a_label}" in summary
+    assert "    child directory    : run_vasp_scf" in summary
+    assert "    OUTCAR files       : 2" in summary
+    assert "    structures         : 2" in summary
+    assert f"  - sub.yaml directory : {root_b_label}" in summary
 
 
 def test_collect_can_skip_nonconverged_outcars_and_write_test_split(
@@ -124,6 +131,7 @@ labeling:
     result = collect_labeled_dataset(load_config(config_path))
     train_text = (tmp_path / "train.xyz").read_text(encoding="utf-8")
     test_text = (tmp_path / "test.xyz").read_text(encoding="utf-8")
+    summary = (tmp_path / "train_collection_summary.txt").read_text(encoding="utf-8")
 
     assert train_text.count("\nLattice=") == 1
     assert test_text.count("\nLattice=") == 1
@@ -132,9 +140,11 @@ labeling:
     assert "Total structures : 2" in result.message
     assert "Train structures : 1" in result.message
     assert "Test structures  : 1" in result.message
-    assert "Skipped OUTCAR   : 1" in result.message
+    assert "Nonconverged OUTCAR skipped : 1" in result.message
     assert len(result.warnings) == 1
     assert "calc_000002" in result.warnings[0]
+    assert "Nonconverged OUTCAR skipped   : 1" in summary
+    assert "Nonconverged OUTCAR by source" in summary
 
 
 def _write_fake_outcar(path: Path, *, energy: float = -1.23456789) -> None:
