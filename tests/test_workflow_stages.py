@@ -2986,6 +2986,99 @@ sampling:
     assert {record["interval"] for record in records} == {3}
 
 
+def test_select_evenly_spaced_count_from_xdatcar_text_file(
+    tmp_path, monkeypatch, capsys
+):
+    """XDATCAR content with a nonstandard name can be sampled by target count."""
+    from ase import Atoms
+    from ase.io import write
+
+    frames = [
+        Atoms("Te", positions=[(float(index), 0.0, 0.0)], cell=[10, 10, 10], pbc=True)
+        for index in range(7)
+    ]
+    trajectory = tmp_path / "aimd_trajectory.txt"
+    write(trajectory, frames, format="vasp-xdatcar")
+    config_path = tmp_path / "pesmaker.yaml"
+    selected_dir = tmp_path / "selected"
+    config_path.write_text(
+        f"""project: xdatcar_count_select
+sampling:
+  selection:
+    method: interval
+    trajectory_pattern: {trajectory.as_posix()}
+    trajectory_format: vasp-xdatcar
+    output_dir: {selected_dir.as_posix()}
+    count: 3
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+
+    assert main(["select", str(config_path)]) == 0
+    output = capsys.readouterr().out
+
+    assert (selected_dir / "selected.xyz").exists()
+    assert "Per trajectory   : no max_count, count=3" in output
+    assert "Selected 3 of 7 MD frame(s) using evenly spaced sampling with count=3" in output
+    records = [
+        json.loads(line)
+        for line in (selected_dir / "manifest.jsonl").read_text(
+            encoding="utf-8"
+        ).splitlines()
+    ]
+    assert [record["source_frame"] for record in records] == [0, 3, 6]
+    assert {record["selection_method"] for record in records} == {"interval"}
+    assert {record["count"] for record in records} == {3}
+
+
+def test_select_fps_from_existing_xdatcar_defaults_to_simple_descriptor(
+    tmp_path, monkeypatch, capsys
+):
+    """Existing AIMD XDATCAR files can use FPS without a sampling engine."""
+    from ase import Atoms
+    from ase.io import write
+
+    frames = [
+        Atoms("Te", positions=[(0.0, 0.0, 0.0)], cell=[10, 10, 10], pbc=True),
+        Atoms("Te", positions=[(0.1, 0.0, 0.0)], cell=[10, 10, 10], pbc=True),
+        Atoms("Te", positions=[(3.0, 0.0, 0.0)], cell=[10, 10, 10], pbc=True),
+    ]
+    trajectory = tmp_path / "XDATCAR"
+    write(trajectory, frames, format="vasp-xdatcar")
+    config_path = tmp_path / "pesmaker.yaml"
+    selected_dir = tmp_path / "selected"
+    config_path.write_text(
+        f"""project: xdatcar_fps_select
+sampling:
+  selection:
+    method: fps
+    trajectory_pattern: {trajectory.as_posix()}
+    output_dir: {selected_dir.as_posix()}
+    max_count: 2
+    min_distance: 0.0
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+
+    assert main(["select", str(config_path)]) == 0
+    output = capsys.readouterr().out
+
+    assert (selected_dir / "selected.xyz").exists()
+    assert (selected_dir / "selection_features.npy").exists()
+    assert "Descriptor       : simple geometry" in output
+    assert "Selected 2 of 3 MD frame(s) using the simple geometry descriptor" in output
+    records = [
+        json.loads(line)
+        for line in (selected_dir / "manifest.jsonl").read_text(
+            encoding="utf-8"
+        ).splitlines()
+    ]
+    assert [record["source_frame"] for record in records] == [0, 2]
+    assert {record["descriptor"] for record in records} == {"simple"}
+
+
 def test_select_samples_each_trajectory_separately_by_default(
     tmp_path, monkeypatch, capsys
 ):
