@@ -237,6 +237,54 @@ verbatim.
 See [`sample-setup`](../commands/sample-setup.md#lammps-mace-sampling) for
 complete MACE templates and links to the MACE/LAMMPS references.
 
+## Existing VASP AIMD XDATCAR Selection
+
+Use this when VASP AIMD has already produced an `XDATCAR` and you only want to
+thin the trajectory before SCF labeling.
+
+FPS selection with PESMaker's built-in simple geometry descriptor:
+
+```yaml
+project: aimd_xdatcar_fps
+
+sampling:
+  selection:
+    method: fps
+    trajectory_pattern: /path/to/XDATCAR
+    output_dir: selected
+    max_count: 100
+    min_distance: 0.0
+    plot: true
+
+labeling:
+  engine: vasp
+  output_dir: labeling
+  incar: templates/vasp/INCAR
+  potcar_library: /path/to/VASP/potentials
+  command: /path/to/vasp_std
+
+jobs:
+  submit_command: sbatch
+  cores_cpu: 36
+  sub_file: templates/sbatch/vasp_cpu_36.sh
+```
+
+Evenly spaced selection by target frame count:
+
+```yaml
+project: aimd_xdatcar_even
+
+sampling:
+  selection:
+    method: interval
+    trajectory_pattern: /path/to/XDATCAR
+    output_dir: selected
+    count: 100
+```
+
+If the file contains XDATCAR content but is not named `XDATCAR`, add
+`trajectory_format: vasp-xdatcar` under `sampling.selection`.
+
 ## SCF Setup From Existing Structures
 
 Use this when structures already exist and you only want VASP folders.

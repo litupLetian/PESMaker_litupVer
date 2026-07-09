@@ -272,8 +272,41 @@ In this selection-only mode, `next` does not prepare or submit MD jobs. It reads
 the trajectory directly, writes `selected/manifest.jsonl`, and then asks for the
 SCF labeling settings if they are not already configured.
 
-For FPS selection from an existing trajectory, keep `engine: gpumd` when you
-want NEP descriptors from `sampling.potential`:
+To choose a fixed number of evenly spaced AIMD frames instead of a fixed stride,
+use `count`:
+
+```yaml
+sampling:
+  selection:
+    method: interval
+    trajectory_pattern: /path/to/XDATCAR
+    output_dir: selected
+    count: 100
+```
+
+For FPS selection from an existing VASP AIMD `XDATCAR` without an external
+descriptor model, omit `sampling.engine`; PESMaker will use the built-in simple
+geometry descriptor:
+
+```yaml
+sampling:
+  selection:
+    method: fps
+    trajectory_pattern: /path/to/XDATCAR
+    output_dir: selected
+    min_distance: 0.0
+    max_count: 100
+```
+
+If the file contains XDATCAR data but has a nonstandard name such as
+`aimd_trajectory.txt`, add:
+
+```yaml
+    trajectory_format: vasp-xdatcar
+```
+
+Keep `engine: gpumd` when you want FPS to use NEP descriptors from
+`sampling.potential`:
 
 ```yaml
 sampling:

@@ -3,7 +3,7 @@
 `select` chooses representative MD frames.
 
 Normal users can let [`next`](next.md) run this stage after GPUMD has written
-`movie.xyz`.
+`movie.xyz`. It can also read an existing VASP AIMD `XDATCAR` directly.
 
 ## Use
 
@@ -36,6 +36,9 @@ The descriptor backend follows `sampling.engine` automatically:
 - `gpumd`: Calorine calculates NEP descriptors with `sampling.potential`;
 - `mace`, `lammps-mace`, or `lammps_mace`: ASE's `MACECalculator` calculates
   invariant MACE descriptors with `sampling.selection.descriptor_model`.
+- omitted, `none`, `vasp`, or `aimd`: PESMaker uses the built-in simple
+  geometry descriptor. This is useful for FPS selection from an existing VASP
+  AIMD `XDATCAR` when no NEP or MACE descriptor model is available.
 
 The terminal summary prints which model descriptor was used. You do not need
 to set `sampling.selection.descriptor`.
@@ -223,6 +226,78 @@ sampling:
 The aliases `strategy` or `mode` may be used instead of `method`, and `stride`,
 `step`, or `frame_interval` may be used instead of `interval`.
 
+If you want a fixed number of frames spread across the whole trajectory, use
+`count` instead of `interval`:
+
+```yaml
+sampling:
+  selection:
+    method: interval
+    trajectory_pattern: /path/to/XDATCAR
+    output_dir: selected
+    count: 100
+```
+
+This keeps approximately evenly spaced frames from the first to the last
+available frame. Optional `offset` still skips the earliest frames before the
+spacing is calculated.
+
+## Existing AIMD XDATCAR
+
+For FPS selection from a VASP AIMD `XDATCAR` without an external descriptor
+model:
+
+```yaml
+sampling:
+  selection:
+    method: fps
+    trajectory_pattern: /path/to/XDATCAR
+    output_dir: selected
+    max_count: 100
+    min_distance: 0.0
+    plot: true
+```
+
+Because no `sampling.engine` is set, PESMaker uses the built-in simple geometry
+descriptor. Start with `min_distance: 0.0` and `max_count` to choose a target
+labeling budget, then inspect `selected/fps_selection.png` before deciding
+whether a nonzero distance threshold is appropriate.
+
+For fixed-stride sampling from the same file:
+
+```yaml
+sampling:
+  selection:
+    method: interval
+    trajectory_pattern: /path/to/XDATCAR
+    output_dir: selected
+    interval: 10
+```
+
+For a target number of evenly spaced frames:
+
+```yaml
+sampling:
+  selection:
+    method: interval
+    trajectory_pattern: /path/to/XDATCAR
+    output_dir: selected
+    count: 100
+```
+
+If the file contains XDATCAR content but is not named `XDATCAR`, `XDATCAR_*`,
+or `*.xdatcar`, tell ASE the format explicitly:
+
+```yaml
+sampling:
+  selection:
+    method: interval
+    trajectory_pattern: /path/to/aimd_trajectory.txt
+    trajectory_format: vasp-xdatcar
+    output_dir: selected
+    count: 100
+```
+
 ## Outputs
 
 ```text
@@ -276,8 +351,9 @@ selected/
 The top-level `selected/manifest.jsonl` combines all selected frames and is the
 file used by `pesmaker scf-setup` or `pesmaker next` for later labeling.
 
-For interval sampling, PESMaker writes only `selected.xyz` and `manifest.jsonl`
-because no descriptor matrix or FPS diagnostic plot is calculated.
+For interval or count-based even sampling, PESMaker writes only `selected.xyz`
+and `manifest.jsonl` because no descriptor matrix or FPS diagnostic plot is
+calculated.
 
 ## Next Step
 

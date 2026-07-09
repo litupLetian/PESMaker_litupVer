@@ -19,6 +19,8 @@ production descriptor from the sampling engine:
   sampling potential.
 - MACE sampling uses invariant descriptors output by the native MACE model
   configured as `sampling.selection.descriptor_model`.
+- Existing AIMD trajectories without a configured sampling engine use the
+  built-in simple geometry descriptor.
 
 Users do not need to select the descriptor backend manually.
 
@@ -132,6 +134,25 @@ sampling:
 
 The MACE descriptor model is the native model loaded by ASE. It is separate
 from the MLIAP-exported model used by LAMMPS.
+
+For an existing VASP AIMD `XDATCAR` when no NEP or MACE descriptor model is
+available:
+
+```yaml
+sampling:
+  selection:
+    method: fps
+    trajectory_pattern: /path/to/XDATCAR
+    output_dir: selected
+    max_count: 100
+    min_distance: 0.0
+    plot: true
+```
+
+This uses the simple geometry descriptor. It is convenient for quick thinning
+of correlated AIMD frames, but it is less chemically expressive than NEP or
+MACE descriptors. Inspect selected structures and the PCA plot before using the
+result as a production DFT labeling set.
 
 Run:
 

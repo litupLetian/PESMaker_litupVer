@@ -53,9 +53,10 @@ def select_sampling_frames(config: PESMakerConfig) -> StageResult:
     if not isinstance(options, dict):
         raise ValueError("sampling.selection must be a mapping")
     pattern = str(options.get("trajectory_pattern", "runs/*/sampling/**/movie.xyz"))
+    trajectory_format = _trajectory_format(options)
     output_dir = Path(str(options.get("output_dir", "selected")))
 
-    frame_groups = _read_trajectory_frame_groups(pattern)
+    frame_groups = _read_trajectory_frame_groups(pattern, file_format=trajectory_format)
     if _separate_trajectories(options):
         return _select_separate_trajectory_frames(
             config,
@@ -109,7 +110,17 @@ def select_sampling_frames(config: PESMakerConfig) -> StageResult:
 def _selection_method(options: dict[str, Any]) -> str:
     raw_method = options.get("method", options.get("strategy", options.get("mode")))
     if raw_method is None and any(
-        key in options for key in ("interval", "stride", "step", "frame_interval")
+        key in options
+        for key in (
+            "interval",
+            "stride",
+            "step",
+            "frame_interval",
+            "count",
+            "num_frames",
+            "n_frames",
+            "frame_count",
+        )
     ):
         raw_method = "interval"
     method = str(raw_method or "fps").lower().replace("-", "_")
@@ -290,7 +301,8 @@ def _per_trajectory_limit_label(options: dict[str, Any], method: str) -> str:
     max_count = options.get("max_count")
     max_text = "no max_count" if max_count is None else f"max_count={int(max_count)}"
     if method == "interval":
-        return f"{max_text}, interval={_selection_interval(options)}"
+        spacing = _interval_spacing_label(options)
+        return f"{max_text}, {spacing}"
     min_distance = float(options.get("min_distance", 0.0))
     return f"{max_text}, min_distance={min_distance:g}"
 
@@ -320,12 +332,19 @@ def _run_interval_selection(
     source_path: Path | None = None,
 ) -> SelectionRun:
     interval = _selection_interval(options)
+    count = _selection_count(options)
+    if interval is not None and count is not None:
+        raise ValueError(
+            "set only one of sampling.selection.interval and "
+            "sampling.selection.count"
+        )
     offset = _selection_offset(options)
     max_count = options.get("max_count")
     max_count = int(max_count) if max_count is not None else None
     selected_indices = _interval_indices(
         frame_count=len(frames),
         interval=interval,
+        count=count,
         offset=offset,
         max_count=max_count,
     )
@@ -344,8 +363,11 @@ def _run_interval_selection(
             "path": str(selected_path),
             "atom_count": len(atoms),
             "selection_method": "interval",
-            "interval": interval,
         }
+        if interval is not None:
+            record["interval"] = interval
+        if count is not None:
+            record["count"] = count
         if source_path is not None:
             record["source_trajectory"] = str(source_path)
         records.append(record)
@@ -355,7 +377,7 @@ def _run_interval_selection(
         tuple(records),
         (
             f"Selected {len(selected)} of {len(frames)} MD frame(s) "
-            f"using interval sampling every {interval} frame(s)"
+            f"using {_interval_message_suffix(interval=interval, count=count)}"
         ),
         (),
         len(selected),
@@ -440,7 +462,7 @@ def _run_fps_selection(
     )
 
 
-def _selection_interval(options: dict[str, Any]) -> int:
+def _selection_interval(options: dict[str, Any]) -> int | None:
     for key in ("interval", "stride", "step", "frame_interval"):
         if key in options:
             interval = int(options[key])
@@ -449,9 +471,17 @@ def _selection_interval(options: dict[str, Any]) -> int:
                     "sampling.selection.interval must be a positive integer"
                 )
             return interval
-    raise ValueError(
-        "sampling.selection.interval is required when method is 'interval'"
-    )
+    return None
+
+
+def _selection_count(options: dict[str, Any]) -> int | None:
+    for key in ("count", "num_frames", "n_frames", "frame_count"):
+        if key in options:
+            count = int(options[key])
+            if count < 1:
+                raise ValueError("sampling.selection.count must be a positive integer")
+            return count
+    return None
 
 
 def _selection_offset(options: dict[str, Any]) -> int:
@@ -468,7 +498,8 @@ def _selection_offset(options: dict[str, Any]) -> int:
 def _interval_indices(
     *,
     frame_count: int,
-    interval: int,
+    interval: int | None,
+    count: int | None,
     offset: int,
     max_count: int | None,
 ) -> list[int]:
@@ -478,18 +509,79 @@ def _interval_indices(
         raise ValueError(
             "sampling.selection.offset must be smaller than the number of frames"
         )
-    indices = list(range(offset, frame_count, interval))
+    if interval is None and count is None:
+        raise ValueError(
+            "sampling.selection.interval or sampling.selection.count is required "
+            "when method is 'interval'"
+        )
+    if count is not None:
+        indices = _evenly_spaced_indices(
+            frame_count=frame_count,
+            offset=offset,
+            count=count,
+        )
+    else:
+        indices = list(range(offset, frame_count, int(interval)))
     if max_count is not None:
         indices = indices[:max_count]
     return indices
 
 
-def _read_trajectory_frames(pattern: str):
-    return read_frames(pattern)
+def _evenly_spaced_indices(
+    *,
+    frame_count: int,
+    offset: int,
+    count: int,
+) -> list[int]:
+    available_count = frame_count - offset
+    if count >= available_count:
+        return list(range(offset, frame_count))
+    positions = np.linspace(offset, frame_count - 1, count)
+    indices = [int(round(value)) for value in positions]
+    deduplicated: list[int] = []
+    seen: set[int] = set()
+    for index in indices:
+        clipped = min(max(index, offset), frame_count - 1)
+        if clipped in seen:
+            continue
+        deduplicated.append(clipped)
+        seen.add(clipped)
+    return deduplicated
 
 
-def _read_trajectory_frame_groups(pattern: str) -> list[tuple[Path, list[Any]]]:
-    return read_frame_groups(pattern)
+def _interval_spacing_label(options: dict[str, Any]) -> str:
+    interval = _selection_interval(options)
+    if interval is not None:
+        return f"interval={interval}"
+    count = _selection_count(options)
+    if count is not None:
+        return f"count={count}"
+    return "interval/count not set"
+
+
+def _interval_message_suffix(*, interval: int | None, count: int | None) -> str:
+    if interval is not None:
+        return f"interval sampling every {interval} frame(s)"
+    return f"evenly spaced sampling with count={count}"
+
+
+def _trajectory_format(options: dict[str, Any]) -> str | None:
+    for key in ("trajectory_format", "input_format", "file_format", "ase_format"):
+        if key in options and options[key]:
+            return str(options[key])
+    return None
+
+
+def _read_trajectory_frames(pattern: str, *, file_format: str | None = None):
+    return read_frames(pattern, file_format=file_format)
+
+
+def _read_trajectory_frame_groups(
+    pattern: str,
+    *,
+    file_format: str | None = None,
+) -> list[tuple[Path, list[Any]]]:
+    return read_frame_groups(pattern, file_format=file_format)
 
 
 def _flatten_frame_groups(frame_groups: list[tuple[Path, list[Any]]]) -> list[Any]:
@@ -594,6 +686,8 @@ def _default_selection_descriptor(sampling_options: dict[str, Any]) -> str:
     engine = str(sampling_options.get("engine", "")).lower().replace("_", "-")
     if engine in {"mace", "lammps-mace"}:
         return "mace"
+    if engine in {"", "none", "vasp", "aimd"}:
+        return "simple"
     return "calorine"
 
 
@@ -868,9 +962,10 @@ def _structure_features(frames) -> np.ndarray:
     max_length = 0
     for atoms in frames:
         numbers = atoms.get_atomic_numbers().reshape(-1, 1)
+        cell = atoms.cell.array.reshape(-1)
         scaled = atoms.get_scaled_positions(wrap=True)
         feature = np.concatenate([numbers, scaled], axis=1).reshape(-1)
-        feature = np.concatenate([np.array([len(atoms)]), feature])
+        feature = np.concatenate([np.array([len(atoms)]), cell, feature])
         raw.append(feature)
         max_length = max(max_length, len(feature))
     features = np.zeros((len(raw), max_length), dtype=float)

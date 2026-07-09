@@ -22,16 +22,21 @@ from pathlib import Path
 from typing import Any
 
 
-def read_frames(pattern: str | Path) -> list[Any]:
+def read_frames(pattern: str | Path, *, file_format: str | None = None) -> list[Any]:
     """Read all ASE frames matching a path or glob pattern."""
-    groups = read_frame_groups(pattern)
+    groups = read_frame_groups(pattern, file_format=file_format)
     return [frame for _, frames in groups for frame in frames]
 
 
-def read_frame_groups(pattern: str | Path) -> list[tuple[Path, list[Any]]]:
+def read_frame_groups(
+    pattern: str | Path,
+    *,
+    file_format: str | None = None,
+) -> list[tuple[Path, list[Any]]]:
     """Read ASE frames grouped by each matched trajectory file."""
     try:
         from ase.io import read
+        from ase.io.formats import UnknownFileTypeError
     except ImportError as exc:
         raise RuntimeError("Reading trajectory frames requires ASE") from exc
 
@@ -42,13 +47,40 @@ def read_frame_groups(pattern: str | Path) -> list[tuple[Path, list[Any]]]:
 
     groups = []
     for path in paths:
-        items = read(path, index=":")
+        resolved_format = _resolve_ase_format(path, file_format)
+        try:
+            items = read(path, index=":", format=resolved_format)
+        except UnknownFileTypeError as exc:
+            raise ValueError(
+                "ASE could not infer the trajectory format for "
+                f"{path}. Set sampling.selection.trajectory_format, for example "
+                "`vasp-xdatcar` for XDATCAR content stored with a nonstandard "
+                "filename."
+            ) from exc
         if not isinstance(items, list):
             items = [items]
         groups.append((path, items))
     if not any(frames for _, frames in groups):
         raise ValueError(f"no frames matched pattern: {pattern_text}")
     return groups
+
+
+def _resolve_ase_format(path: Path, file_format: str | None) -> str | None:
+    if file_format:
+        return _normalize_ase_format(file_format)
+    upper_name = path.name.upper()
+    if upper_name == "XDATCAR" or upper_name.startswith("XDATCAR_"):
+        return "vasp-xdatcar"
+    if path.suffix.lower() == ".xdatcar":
+        return "vasp-xdatcar"
+    return None
+
+
+def _normalize_ase_format(file_format: str) -> str:
+    normalized = file_format.strip().lower().replace("_", "-")
+    if normalized in {"xdatcar", "vasp-xdatcar"}:
+        return "vasp-xdatcar"
+    return normalized
 
 
 def write_extxyz_many(path: str | Path, frames) -> None:
