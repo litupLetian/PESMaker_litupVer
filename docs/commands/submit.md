@@ -113,6 +113,11 @@ happens during `--dry-run`, while the scheduler itself is not called. If no
 script-refresh setting is present, PESMaker submits the existing `submit.sh`
 without rewriting it.
 
+For SCF jobs, `jobs.copy_sub_file: true` changes that refresh into a direct,
+byte-for-byte copy of the configured template. No placeholders, Slurm job
+names, resource values, or commands are rewritten. The option requires a
+submit template and defaults to `false`.
+
 When `jobs.sub_file` is provided, PESMaker does not scan and rewrite literal
 resource directives such as `#SBATCH --ntasks` or literal VASP command lines.
 It only replaces explicit placeholders such as `{command}`, `{job_name}`,

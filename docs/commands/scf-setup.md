@@ -29,6 +29,28 @@ jobs:
   sub_file: templates/sbatch/vasp_cpu_36.sh
 ```
 
+## Copy A Submit Template Verbatim
+
+By default, `sub_file` is a renderable template: PESMaker replaces supported
+placeholders and refreshes the Slurm job name. To copy the template directly
+to every SCF folder as `submit.sh`, enable:
+
+```yaml
+jobs:
+  sub_file: templates/sbatch/vasp_cpu_36.sh
+  copy_sub_file: true
+```
+
+In this mode PESMaker performs a byte-for-byte copy. It does not replace
+`{command}`, `{job_name}`, resource placeholders, literal Slurm job names, or
+literal command lines. The template must therefore be ready to submit without
+per-job rendering. `copy_sub_file` must be `true` or `false` and defaults to
+`false`; it applies only to VASP SCF/labeling submit scripts.
+
+If `pesmaker submit` refreshes a pending or retry SCF script, copy mode copies
+the current template again instead of rendering it. Edit the source template,
+not an already prepared `submit.sh`, when this mode is enabled.
+
 ## Inputs
 
 PESMaker looks for structures in this order:
