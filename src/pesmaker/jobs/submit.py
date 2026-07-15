@@ -19,8 +19,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
+import os
 import shlex
 import subprocess
+import sys
 from pathlib import Path
 
 from pesmaker.artifacts import _read_manifest, _section_output_dir
@@ -53,6 +56,68 @@ class PreparedJob:
 
     workdir: Path
     submit_script: Path | None = None
+
+
+@dataclass(frozen=True)
+class BackgroundSubmitProcess:
+    """Detached PESMaker submit process and its combined output log."""
+
+    pid: int
+    log_path: Path
+
+
+def start_background_submit(
+    config: PESMakerConfig,
+    config_path: Path,
+    *,
+    stage: str = "scf",
+) -> BackgroundSubmitProcess:
+    """Start a detached PESMaker process that submits a whole stage.
+
+    Detaching the outer PESMaker process keeps a local ``bash`` submission
+    loop alive after its launching terminal or SSH connection is closed.
+    """
+    output_dir = _stage_output_dir(config, stage)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    log_path = (
+        output_dir / f"{stage}_submit_{timestamp}_{os.getpid()}.log"
+    ).resolve()
+    command = [
+        sys.executable,
+        "-u",
+        "-m",
+        "pesmaker",
+        "submit",
+        str(config_path.resolve()),
+        "--stage",
+        stage,
+    ]
+
+    with log_path.open("ab") as output:
+        common_options = {
+            "stdin": subprocess.DEVNULL,
+            "stdout": output,
+            "stderr": subprocess.STDOUT,
+            "close_fds": True,
+        }
+        if os.name == "nt":
+            process = subprocess.Popen(
+                command,
+                creationflags=(
+                    subprocess.DETACHED_PROCESS
+                    | subprocess.CREATE_NEW_PROCESS_GROUP
+                ),
+                **common_options,
+            )
+        else:
+            process = subprocess.Popen(
+                command,
+                start_new_session=True,
+                **common_options,
+            )
+
+    return BackgroundSubmitProcess(pid=process.pid, log_path=log_path)
 
 
 def submit_jobs(

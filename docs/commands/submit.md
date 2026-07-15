@@ -58,6 +58,45 @@ incomplete VASP output, or an electronic SCF nonconvergence marker. If
 `Jobs to submit` is `0`, all discovered calculations are complete according to
 the configured checks.
 
+## Run the Whole Submission in the Background
+
+Use `--background` to detach the whole PESMaker submit operation from the
+current terminal or SSH session:
+
+```bash
+pesmaker submit run.yaml --background
+```
+
+PESMaker prints the detached process ID and a unique log path, then returns to
+the shell immediately:
+
+```text
+Background submission started.
+Process ID       : 18420
+Log              : /path/to/labeling/scf_submit_20260715-153000_18419.log
+```
+
+This option protects the outer PESMaker process. It is especially useful with
+`jobs.submit_command: bash`, because the detached worker keeps the complete
+serial sequence alive and starts the next calculation only after the current
+`submit.sh` exits. Closing the terminal does not stop that worker.
+
+Monitor it with the printed log path or the normal calculation output files:
+
+```bash
+tail -f labeling/scf_submit_20260715-153000_18419.log
+```
+
+The same option works for other stages:
+
+```bash
+pesmaker submit run.yaml --stage sampling --background
+pesmaker submit run.yaml --stage training --background
+```
+
+`--background` cannot be combined with `--dry-run`. Preview in the foreground
+first, then start the real background submission.
+
 ## Stage Names
 
 `submit` is one command with different stages:

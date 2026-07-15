@@ -38,7 +38,7 @@ from pesmaker.generators.structures import (
     format_generate_summary,
     generate_structures,
 )
-from pesmaker.jobs.submit import submit_jobs
+from pesmaker.jobs.submit import start_background_submit, submit_jobs
 from pesmaker.labelers.vasp import setup_labeling
 from pesmaker.plot import available_plot_commands, run_plot_command
 from pesmaker.results import StageResult
@@ -198,6 +198,14 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Write the submission commands without calling the scheduler.",
     )
+    submit_parser.add_argument(
+        "--background",
+        action="store_true",
+        help=(
+            "Run the whole submit operation in a detached process that "
+            "survives terminal or SSH disconnection."
+        ),
+    )
 
     init_parser = subparsers.add_parser(
         "init",
@@ -288,6 +296,19 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         if args.command == "submit":
+            if args.background:
+                if args.dry_run:
+                    raise ValueError("--background cannot be used with --dry-run")
+                process = start_background_submit(
+                    config,
+                    args.config,
+                    stage=args.stage,
+                )
+                print("Background submission started.")
+                print(f"Process ID       : {process.pid}")
+                print(f"Log              : {process.log_path}")
+                print()
+                return 0
             _print_submit_result(
                 submit_jobs(config, stage=args.stage, dry_run=args.dry_run),
                 config_path=args.config,
