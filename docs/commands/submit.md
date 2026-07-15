@@ -81,6 +81,22 @@ This option protects the outer PESMaker process. It is especially useful with
 serial sequence alive and starts the next calculation only after the current
 `submit.sh` exits. Closing the terminal does not stop that worker.
 
+For synchronous `bash` submissions, PESMaker reports every calculation as it
+starts and as soon as its `submit.sh` exits:
+
+```text
+[2026-07-15 18:20:03] STARTED   1/120  labeling/calc_000000
+[2026-07-15 18:52:41] COMPLETED 1/120  labeling/calc_000000  elapsed=00:32:38
+[2026-07-15 18:52:41] STARTED   2/120  labeling/calc_000001
+```
+
+A nonzero script exit is reported as `FAILED` before the serial sequence stops.
+Each event is flushed immediately to both the terminal and
+`labeling/scf_submitted_jobs.txt`. With `--background`, terminal output is
+redirected to the printed `scf_submit_*.log`, so both logs can be monitored
+while the calculations are running. `COMPLETED` means that `submit.sh` exited
+successfully; it does not by itself certify VASP electronic convergence.
+
 Monitor it with the printed log path or the normal calculation output files:
 
 ```bash

@@ -83,6 +83,47 @@ PESMaker prepares one SCF job per frame. This lets users point
 `labeling.input_dir` at a manually prepared folder even when the folder was not
 created by PESMaker and has no `manifest.jsonl`.
 
+## Distribute Common Files To Every SCF Folder
+
+Use `labeling.template_dir` to copy a set of common auxiliary files into every
+prepared SCF calculation folder:
+
+```yaml
+labeling:
+  engine: vasp
+  input_dir: generated
+  output_dir: labeling
+  template_dir: templates/vasp/common
+```
+
+For example, given this source directory:
+
+```text
+templates/vasp/common/
+  KPOINTS
+  vdW_kernel.bindat
+  helper.dat
+  nested/
+    ignored.dat
+```
+
+each prepared calculation folder receives `KPOINTS`, `vdW_kernel.bindat`, and
+`helper.dat`. PESMaker copies only regular files directly inside
+`template_dir`; it does not recursively copy `nested/` or any other
+subdirectory. File names are preserved, and existing destination files with
+the same names are overwritten at the time of copying. File metadata is
+preserved where supported by the operating system.
+
+Use this option for auxiliary files that should be identical in every SCF job.
+Avoid placing PESMaker-managed names such as `POSCAR`, `INCAR`, `POTCAR`, or
+`submit.sh` in `template_dir`, because setup ordering can cause one version to
+overwrite another. In particular, PESMaker writes the final POTCAR and submit
+script after distributing these common files.
+
+`labeling.template_dir` is separate from `jobs.copy_sub_file`. The former
+distributes all top-level files from a directory, while the latter copies one
+submit-script template specifically to `submit.sh`.
+
 ## Outputs
 
 ```text

@@ -4,17 +4,21 @@
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from pesmaker.cli import main
 from pesmaker.config.io import load_config
 from pesmaker.jobs.submit import (
     BackgroundSubmitProcess,
     start_background_submit,
+    submit_jobs,
 )
 
 
@@ -131,3 +135,92 @@ def test_cli_rejects_background_dry_run(tmp_path, monkeypatch, capsys):
 
     assert started is False
     assert "--background cannot be used with --dry-run" in capsys.readouterr().err
+
+
+def _write_prepared_jobs(output_dir: Path, count: int) -> list[Path]:
+    output_dir.mkdir(parents=True)
+    workdirs = []
+    records = []
+    for index in range(count):
+        workdir = output_dir / f"calc_{index:06d}"
+        workdir.mkdir()
+        script = workdir / "submit.sh"
+        script.write_text("#!/usr/bin/env bash\n", encoding="utf-8")
+        workdirs.append(workdir)
+        records.append(
+            {
+                "workdir": str(workdir),
+                "submit_script": str(script),
+            }
+        )
+    (output_dir / "labeling_manifest.jsonl").write_text(
+        "\n".join(json.dumps(record) for record in records) + "\n",
+        encoding="utf-8",
+    )
+    return workdirs
+
+
+def test_bash_submit_reports_and_flushes_each_completed_job(
+    tmp_path, monkeypatch, capsys
+):
+    """Each synchronous Bash job should be visible before the next one runs."""
+    output_dir = tmp_path / "labeling"
+    workdirs = _write_prepared_jobs(output_dir, 2)
+    config_path = tmp_path / "run.yaml"
+    _write_config(config_path, output_dir)
+    monotonic_values = iter((10.0, 15.0, 20.0, 27.0))
+    calls = []
+
+    def fake_run(submit_command, script):
+        calls.append(script.parent)
+        current_log = (output_dir / "scf_submitted_jobs.txt").read_text(
+            encoding="utf-8"
+        )
+        assert f" STARTED   {len(calls)}/2  {script.parent}" in current_log
+        if len(calls) == 2:
+            assert f" COMPLETED 1/2  {workdirs[0]}" in current_log
+        return f"finished {script.parent.name}"
+
+    monkeypatch.setattr("pesmaker.jobs.submit.time.monotonic", lambda: next(monotonic_values))
+    monkeypatch.setattr("pesmaker.jobs.submit._run_submit_command", fake_run)
+
+    result = submit_jobs(load_config(config_path))
+    output = capsys.readouterr().out
+    log_text = result.files[0].read_text(encoding="utf-8")
+
+    assert calls == workdirs
+    assert f" STARTED   1/2  {workdirs[0]}" in output
+    assert f" COMPLETED 1/2  {workdirs[0]}  elapsed=00:00:05" in output
+    assert f" STARTED   2/2  {workdirs[1]}" in output
+    assert f" COMPLETED 2/2  {workdirs[1]}  elapsed=00:00:07" in output
+    assert f" STARTED   1/2  {workdirs[0]}" in log_text
+    assert f" COMPLETED 1/2  {workdirs[0]}  elapsed=00:00:05" in log_text
+    assert log_text.index("COMPLETED 1/2") < log_text.index("STARTED   2/2")
+
+
+def test_bash_submit_reports_failure_before_stopping(
+    tmp_path, monkeypatch, capsys
+):
+    """A failed foreground script should be flushed before the error escapes."""
+    output_dir = tmp_path / "labeling"
+    workdir = _write_prepared_jobs(output_dir, 1)[0]
+    config_path = tmp_path / "run.yaml"
+    _write_config(config_path, output_dir)
+    monotonic_values = iter((100.0, 103.0))
+
+    def fake_run(submit_command, script):
+        raise subprocess.CalledProcessError(7, ["bash", script.name])
+
+    monkeypatch.setattr("pesmaker.jobs.submit.time.monotonic", lambda: next(monotonic_values))
+    monkeypatch.setattr("pesmaker.jobs.submit._run_submit_command", fake_run)
+
+    with pytest.raises(subprocess.CalledProcessError):
+        submit_jobs(load_config(config_path))
+
+    output = capsys.readouterr().out
+    log_text = (output_dir / "scf_submitted_jobs.txt").read_text(
+        encoding="utf-8"
+    )
+    expected = f" FAILED    1/1  {workdir}  elapsed=00:00:03"
+    assert expected in output
+    assert expected in log_text
