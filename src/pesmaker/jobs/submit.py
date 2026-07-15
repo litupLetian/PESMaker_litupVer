@@ -67,6 +67,37 @@ class BackgroundSubmitProcess:
     log_path: Path
 
 
+class SubmissionJobError(subprocess.CalledProcessError):
+    """One prepared job failed while a stage was being submitted."""
+
+    def __init__(
+        self,
+        error: subprocess.CalledProcessError,
+        *,
+        stage: str,
+        workdir: Path,
+        job_number: int,
+        total_jobs: int,
+        serial: bool,
+    ) -> None:
+        super().__init__(
+            error.returncode,
+            error.cmd,
+            output=error.output,
+            stderr=error.stderr,
+        )
+        self.stage = stage
+        self.workdir = workdir
+        self.job_number = job_number
+        self.total_jobs = total_jobs
+        self.serial = serial
+
+    @property
+    def remaining_jobs(self) -> int:
+        """Return the number of later manifest entries not started here."""
+        return max(0, self.total_jobs - self.job_number)
+
+
 def start_background_submit(
     config: PESMakerConfig,
     config_path: Path,
@@ -192,7 +223,27 @@ def submit_jobs(
             )
         try:
             message = _run_submit_command(submit_command, script)
-        except (OSError, subprocess.SubprocessError):
+        except subprocess.CalledProcessError as exc:
+            if live_progress:
+                record(
+                    _progress_line(
+                        "FAILED",
+                        job_number,
+                        len(jobs),
+                        workdir,
+                        elapsed=time.monotonic() - started_at,
+                    ),
+                    echo=True,
+                )
+            raise SubmissionJobError(
+                exc,
+                stage=stage,
+                workdir=workdir,
+                job_number=job_number,
+                total_jobs=len(jobs),
+                serial=live_progress,
+            ) from None
+        except OSError:
             if live_progress:
                 record(
                     _progress_line(

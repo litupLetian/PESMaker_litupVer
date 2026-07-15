@@ -17,6 +17,7 @@ from pesmaker.cli import main
 from pesmaker.config.io import load_config
 from pesmaker.jobs.submit import (
     BackgroundSubmitProcess,
+    SubmissionJobError,
     start_background_submit,
     submit_jobs,
 )
@@ -214,7 +215,7 @@ def test_bash_submit_reports_failure_before_stopping(
     monkeypatch.setattr("pesmaker.jobs.submit.time.monotonic", lambda: next(monotonic_values))
     monkeypatch.setattr("pesmaker.jobs.submit._run_submit_command", fake_run)
 
-    with pytest.raises(subprocess.CalledProcessError):
+    with pytest.raises(SubmissionJobError) as caught:
         submit_jobs(load_config(config_path))
 
     output = capsys.readouterr().out
@@ -224,3 +225,38 @@ def test_bash_submit_reports_failure_before_stopping(
     expected = f" FAILED    1/1  {workdir}  elapsed=00:00:03"
     assert expected in output
     assert expected in log_text
+    assert caught.value.returncode == 7
+    assert caught.value.workdir == workdir
+    assert caught.value.remaining_jobs == 0
+
+
+def test_cli_formats_killed_bash_job_without_traceback(
+    tmp_path, monkeypatch, capsys
+):
+    """A signal-style shell status should become a concise stop summary."""
+    output_dir = tmp_path / "labeling"
+    workdirs = _write_prepared_jobs(output_dir, 2)
+    config_path = tmp_path / "run.yaml"
+    _write_config(config_path, output_dir)
+    monotonic_values = iter((200.0, 205.0))
+
+    def fake_run(submit_command, script):
+        raise subprocess.CalledProcessError(143, ["bash", script.name])
+
+    monkeypatch.setattr(
+        "pesmaker.jobs.submit.time.monotonic",
+        lambda: next(monotonic_values),
+    )
+    monkeypatch.setattr("pesmaker.jobs.submit._run_submit_command", fake_run)
+
+    assert main(["submit", str(config_path)]) == 2
+    captured = capsys.readouterr()
+
+    assert f" FAILED    1/2  {workdirs[0]}  elapsed=00:00:05" in captured.out
+    assert "SCF serial submission stopped." in captured.err
+    assert f"Failed job       : {workdirs[0]}" in captured.err
+    assert "Exit status      : 143" in captured.err
+    assert "Termination      : SIGTERM" in captured.err
+    assert "Remaining jobs   : 1 not started" in captured.err
+    assert "Traceback" not in captured.err
+    assert "CalledProcessError" not in captured.err

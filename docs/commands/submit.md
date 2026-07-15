@@ -97,6 +97,21 @@ redirected to the printed `scf_submit_*.log`, so both logs can be monitored
 while the calculations are running. `COMPLETED` means that `submit.sh` exited
 successfully; it does not by itself certify VASP electronic convergence.
 
+The CLI converts a failed script into a concise stop summary instead of a
+Python traceback. For example, shell status `143` conventionally means that the
+script received `SIGTERM`:
+
+```text
+SCF serial submission stopped.
+Failed job       : labeling/calc_000004
+Exit status      : 143
+Termination      : SIGTERM
+Remaining jobs   : 115 not started
+```
+
+The same summary is written to `scf_submit_*.log` during a background run. The
+failed event remains in `scf_submitted_jobs.txt`.
+
 Monitor it with the printed log path or the normal calculation output files:
 
 ```bash
