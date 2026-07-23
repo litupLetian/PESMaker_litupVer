@@ -6,6 +6,7 @@
 | --- | --- | --- |
 | `aimd_fps_to_nep.py` | PESMaker 最远点采样（FPS） | 根据构型差异选择代表性结构 |
 | `aimd_interval_to_nep.py` | 等间距采样 | 按固定轨迹帧间隔抽稀 AIMD 时间序列 |
+| `merge_aimd_train_xyz.py` | 指定来源合并 | 将多个正式 FPS 或 Interval `train.xyz` 合并并记录来源范围 |
 
 两个脚本都不会修改或导入 PESMaker 私有源码，而是调用正式命令：
 
@@ -214,6 +215,142 @@ PESMakerToolkit_AIMD_Interval_to_NEP/
 
 等间距采样不计算 FPS 描述符，因此不会生成 `selection_features.npy` 或 `fps_selection.png`。
 
+## 合并脚本用途与语法
+
+`merge_aimd_train_xyz.py` 用于合并多个 AIMD 子目录中已经生成并验证的正式 `train.xyz`。它不重新解析 AIMD、不调用 PESMaker，也不修改任何 PESMaker 源码。
+
+用户必须明确指定合并来源，不允许脚本自动猜测或混合 FPS 与 Interval：
+
+```bash
+python PESMaker_AIMD_Toolkit/merge_aimd_train_xyz.py \
+  --aimd-root /absolute/path/to/AIMD_ROOT \
+  --source interval
+```
+
+合并 FPS 来源：
+
+```bash
+python PESMaker_AIMD_Toolkit/merge_aimd_train_xyz.py \
+  --aimd-root /absolute/path/to/AIMD_ROOT \
+  --source fps
+```
+
+参数：
+
+| 参数 | 是否必填 | 说明 |
+| --- | --- | --- |
+| `--aimd-root` | 是 | 直接包含多个 VASP AIMD 运行目录的根目录 |
+| `--source` | 是 | 只能是 `interval` 或 `fps`，不提供默认值 |
+
+### 预期输入结构
+
+`--aimd-root` 的直接子目录中，正式 AIMD 目录必须同时包含 INCAR、XDATCAR 和 OUTCAR：
+
+```text
+AIMD_ROOT/
+├── aimd_case_01/
+│   ├── INCAR
+│   ├── XDATCAR
+│   ├── OUTCAR
+│   ├── PESMakerToolkit_AIMD_Interval_to_NEP/
+│   │   └── train.xyz
+│   └── PESMakerToolkit_AIMD_FPS_to_NEP/
+│       └── train.xyz
+├── aimd_case_02/
+│   ├── INCAR
+│   ├── XDATCAR
+│   ├── OUTCAR
+│   └── ...
+└── scripts/                 # 不含三项 VASP 文件，因此忽略
+```
+
+来源参数和实际查找路径严格对应：
+
+```text
+--source interval
+→ <AIMD子目录>/PESMakerToolkit_AIMD_Interval_to_NEP/train.xyz
+
+--source fps
+→ <AIMD子目录>/PESMakerToolkit_AIMD_FPS_to_NEP/train.xyz
+```
+
+脚本只检查 AIMD 根目录的直接子目录，不递归搜索任意 `train.xyz`。因此不会误收集 `_smoke_test`、`_failed_*` 或其他临时目录。
+
+每一个识别出的正式 AIMD 子目录都必须存在所选来源的 `train.xyz`。如果任一目录缺失，脚本会在创建合并输出前失败并列出缺失目录，不会静默跳过。
+
+### 合并输出目录
+
+输出位于 AIMD 根目录的同级目录，名称明确包含来源：
+
+```text
+<aimd-root上级目录>/Merged_Interval_NEP_TrainXYZ/
+<aimd-root上级目录>/Merged_FPS_NEP_TrainXYZ/
+```
+
+例如：
+
+```text
+/mnt/d/ResearchData/
+├── growthDatasetPreparation_AIMD/
+└── Merged_Interval_NEP_TrainXYZ/
+```
+
+输出文件结构：
+
+```text
+Merged_Interval_NEP_TrainXYZ/
+├── train.xyz
+├── source_ranges.tsv
+├── README.md
+└── merge.log
+```
+
+- `train.xyz`：按照 AIMD 目录名称不区分大小写排序后直接拼接的训练集，不重新格式化标签。
+- `source_ranges.tsv`：机器可读的来源、帧数、元素、原子数和合并范围。
+- `README.md`：自动生成的人类可读来源表、目录说明、合并规则和复现命令。
+- `merge.log`：来源验证、帧数范围、总帧数和失败原因。
+
+`source_ranges.tsv` 包含：
+
+```text
+order
+sampling_source
+aimd_directory
+source_train_xyz
+frame_count
+atom_count
+elements
+merged_start_0based
+merged_end_0based
+merged_start_1based
+merged_end_1based
+```
+
+零基和一基范围均为包含式。脚本根据实际读取帧数动态计算范围，不硬编码当前数据集的数量。
+
+### 合并验证与安全行为
+
+每个来源和最终合并文件均使用 ASE 流式验证：
+
+- extxyz 至少包含一帧。
+- 晶胞、位置、Energy、force 和 Virial 均存在且为有限值。
+- force 形状严格为 `N×3`。
+- Virial 恰好包含 9 个分量。
+- 合并总帧数等于所有来源帧数之和。
+- 合并元素集合与来源元素集合一致。
+
+合并过程先生成：
+
+```text
+train.xyz.partial
+source_ranges.tsv.partial
+README.md.partial
+```
+
+全部验证通过后才改名为正式文件，其中 `train.xyz` 最后改名。输出目录已经存在时脚本拒绝覆盖。
+
+第一版不会执行随机打乱、去重、二次 FPS、train/test 划分或标签单位转换。
+
 ## WSL 调用示例
 
 Windows D 盘在 WSL 中通常映射到 `/mnt/d`。例如：
@@ -231,6 +368,7 @@ conda run -n pesmaker python \
 ```bash
 python aimd_fps_to_nep.py --help
 python aimd_interval_to_nep.py --help
+python merge_aimd_train_xyz.py --help
 ```
 
 ## 输出文件说明
