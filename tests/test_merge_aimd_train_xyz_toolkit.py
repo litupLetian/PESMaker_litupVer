@@ -97,7 +97,7 @@ def test_missing_selected_source_is_rejected_without_output(tmp_path: Path):
 
     with pytest.raises(merge_tool.MergeError, match="lack the selected fps"):
         merge_tool.run_merge(aimd_root=root, source="fps")
-    assert not (tmp_path / "Merged_FPS_NEP_TrainXYZ").exists()
+    assert not (root / "Merged_FPS_NEP_TrainXYZ").exists()
 
 
 def test_merge_interval_sources_end_to_end(tmp_path: Path):
@@ -110,7 +110,7 @@ def test_merge_interval_sources_end_to_end(tmp_path: Path):
     write_train_xyz(case_b / source_directory / "train.xyz", [-3.0], atom_count=3)
 
     train_path = merge_tool.run_merge(aimd_root=root, source="interval")
-    output = tmp_path / "Merged_Interval_NEP_TrainXYZ"
+    output = root / "Merged_Interval_NEP_TrainXYZ"
 
     assert train_path == output / "train.xyz"
     assert {path.name for path in output.iterdir()} == {
@@ -155,7 +155,7 @@ def test_invalid_source_dataset_does_not_create_formal_train(tmp_path: Path):
 
     with pytest.raises(merge_tool.MergeError, match="no Virial label"):
         merge_tool.run_merge(aimd_root=root, source="interval")
-    output = tmp_path / "Merged_Interval_NEP_TrainXYZ"
+    output = root / "Merged_Interval_NEP_TrainXYZ"
     assert output.is_dir()
     assert not (output / "train.xyz").exists()
     assert (output / "merge.log").is_file()
@@ -165,6 +165,6 @@ def test_existing_output_directory_is_refused(tmp_path: Path):
     root = tmp_path / "aimd"
     root.mkdir()
     make_aimd_directory(root, "case")
-    (tmp_path / "Merged_Interval_NEP_TrainXYZ").mkdir()
+    (root / "Merged_Interval_NEP_TrainXYZ").mkdir()
     with pytest.raises(merge_tool.MergeError, match="refusing to overwrite"):
         merge_tool.run_merge(aimd_root=root, source="interval")

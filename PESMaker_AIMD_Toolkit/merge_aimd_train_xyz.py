@@ -81,7 +81,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--aimd-root",
         type=Path,
         required=True,
-        help="Directory whose direct children are VASP AIMD run directories.",
+        help=(
+            "Directory whose direct children are VASP AIMD run directories; "
+            "the merged output directory is created inside this directory."
+        ),
     )
     parser.add_argument(
         "--source",
@@ -118,7 +121,7 @@ def run_merge(*, aimd_root: Path, source: str) -> Path:
     if not aimd_root.is_dir():
         raise MergeError(f"AIMD root directory does not exist: {aimd_root}")
 
-    output_dir = aimd_root.parent / f"Merged_{mode.display_name}_NEP_TrainXYZ"
+    output_dir = aimd_root / f"Merged_{mode.display_name}_NEP_TrainXYZ"
     if output_dir.exists():
         raise MergeError(
             f"output directory already exists; refusing to overwrite: {output_dir}"

@@ -280,18 +280,19 @@ AIMD_ROOT/
 
 ### 合并输出目录
 
-输出位于 AIMD 根目录的同级目录，名称明确包含来源：
+输出位于 AIMD 根目录内部，与其中各个 AIMD 项目目录同级，名称明确包含来源：
 
 ```text
-<aimd-root上级目录>/Merged_Interval_NEP_TrainXYZ/
-<aimd-root上级目录>/Merged_FPS_NEP_TrainXYZ/
+<aimd-root>/Merged_Interval_NEP_TrainXYZ/
+<aimd-root>/Merged_FPS_NEP_TrainXYZ/
 ```
 
 例如：
 
 ```text
-/mnt/d/ResearchData/
-├── growthDatasetPreparation_AIMD/
+/mnt/d/ResearchData/growthDatasetPreparation_AIMD/
+├── AIMD项目1/
+├── AIMD项目2/
 └── Merged_Interval_NEP_TrainXYZ/
 ```
 
