@@ -19,8 +19,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
+import os
 import shlex
 import subprocess
+import sys
+import time
 from pathlib import Path
 
 from pesmaker.artifacts import _read_manifest, _section_output_dir
@@ -55,6 +59,99 @@ class PreparedJob:
     submit_script: Path | None = None
 
 
+@dataclass(frozen=True)
+class BackgroundSubmitProcess:
+    """Detached PESMaker submit process and its combined output log."""
+
+    pid: int
+    log_path: Path
+
+
+class SubmissionJobError(subprocess.CalledProcessError):
+    """One prepared job failed while a stage was being submitted."""
+
+    def __init__(
+        self,
+        error: subprocess.CalledProcessError,
+        *,
+        stage: str,
+        workdir: Path,
+        job_number: int,
+        total_jobs: int,
+        serial: bool,
+    ) -> None:
+        super().__init__(
+            error.returncode,
+            error.cmd,
+            output=error.output,
+            stderr=error.stderr,
+        )
+        self.stage = stage
+        self.workdir = workdir
+        self.job_number = job_number
+        self.total_jobs = total_jobs
+        self.serial = serial
+
+    @property
+    def remaining_jobs(self) -> int:
+        """Return the number of later manifest entries not started here."""
+        return max(0, self.total_jobs - self.job_number)
+
+
+def start_background_submit(
+    config: PESMakerConfig,
+    config_path: Path,
+    *,
+    stage: str = "scf",
+) -> BackgroundSubmitProcess:
+    """Start a detached PESMaker process that submits a whole stage.
+
+    Detaching the outer PESMaker process keeps a local ``bash`` submission
+    loop alive after its launching terminal or SSH connection is closed.
+    """
+    output_dir = _stage_output_dir(config, stage)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    log_path = (
+        output_dir / f"{stage}_submit_{timestamp}_{os.getpid()}.log"
+    ).resolve()
+    command = [
+        sys.executable,
+        "-u",
+        "-m",
+        "pesmaker",
+        "submit",
+        str(config_path.resolve()),
+        "--stage",
+        stage,
+    ]
+
+    with log_path.open("ab") as output:
+        common_options = {
+            "stdin": subprocess.DEVNULL,
+            "stdout": output,
+            "stderr": subprocess.STDOUT,
+            "close_fds": True,
+        }
+        if os.name == "nt":
+            process = subprocess.Popen(
+                command,
+                creationflags=(
+                    subprocess.DETACHED_PROCESS
+                    | subprocess.CREATE_NEW_PROCESS_GROUP
+                ),
+                **common_options,
+            )
+        else:
+            process = subprocess.Popen(
+                command,
+                start_new_session=True,
+                **common_options,
+            )
+
+    return BackgroundSubmitProcess(pid=process.pid, log_path=log_path)
+
+
 def submit_jobs(
     config: PESMakerConfig,
     *,
@@ -76,7 +173,20 @@ def submit_jobs(
     skip_completed = _skip_completed_jobs(config, stage)
     check_scf_convergence = _check_scf_convergence(config, stage)
     refresh_scripts = _refresh_vasp_submit_scripts(config, stage, skip_completed)
-    for job in jobs:
+    live_progress = _is_foreground_bash_submit(submit_command) and not dry_run
+    if not dry_run:
+        submitted_log.write_text("", encoding="utf-8")
+
+    def record(line: str, *, echo: bool = False) -> None:
+        lines.append(line)
+        if not dry_run:
+            with submitted_log.open("a", encoding="utf-8") as handle:
+                handle.write(f"{line}\n")
+                handle.flush()
+        if echo:
+            print(line, flush=True)
+
+    for job_number, job in enumerate(jobs, start=1):
         workdir = job.workdir
         if skip_completed:
             outcar_state = _vasp_outcar_state(workdir)
@@ -84,16 +194,16 @@ def submit_jobs(
                 outcar_state,
                 check_scf_convergence=check_scf_convergence,
             ):
-                lines.append(f"SKIPPED completed VASP job: {workdir}")
+                record(f"SKIPPED completed VASP job: {workdir}")
                 skipped_count += 1
                 continue
             retry_reason = _vasp_retry_reason(outcar_state)
             if retry_reason:
-                lines.append(f"RETRY {retry_reason}: {workdir}")
+                record(f"RETRY {retry_reason}: {workdir}")
 
         if refresh_scripts:
             script = _refresh_vasp_submit_script(config, workdir)
-            lines.append(f"REFRESHED submit script: {script}")
+            record(f"REFRESHED submit script: {script}")
         else:
             script = _existing_submit_script(job)
             if script is None:
@@ -101,13 +211,66 @@ def submit_jobs(
 
         display = _submit_display(submit_command, script)
         if dry_run:
-            lines.append(f"DRY-RUN {display}")
+            record(f"DRY-RUN {display}")
             submitted_count += 1
             continue
-        message = _run_submit_command(submit_command, script)
-        lines.append(f"{script.parent}: {message}")
+
+        started_at = time.monotonic()
+        if live_progress:
+            record(
+                _progress_line("STARTED", job_number, len(jobs), workdir),
+                echo=True,
+            )
+        try:
+            message = _run_submit_command(submit_command, script)
+        except subprocess.CalledProcessError as exc:
+            if live_progress:
+                record(
+                    _progress_line(
+                        "FAILED",
+                        job_number,
+                        len(jobs),
+                        workdir,
+                        elapsed=time.monotonic() - started_at,
+                    ),
+                    echo=True,
+                )
+            raise SubmissionJobError(
+                exc,
+                stage=stage,
+                workdir=workdir,
+                job_number=job_number,
+                total_jobs=len(jobs),
+                serial=live_progress,
+            ) from None
+        except OSError:
+            if live_progress:
+                record(
+                    _progress_line(
+                        "FAILED",
+                        job_number,
+                        len(jobs),
+                        workdir,
+                        elapsed=time.monotonic() - started_at,
+                    ),
+                    echo=True,
+                )
+            raise
+        if live_progress:
+            record(
+                _progress_line(
+                    "COMPLETED",
+                    job_number,
+                    len(jobs),
+                    workdir,
+                    elapsed=time.monotonic() - started_at,
+                ),
+                echo=True,
+            )
+        record(f"{script.parent}: {message}")
         submitted_count += 1
-    submitted_log.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    if dry_run:
+        submitted_log.write_text("\n".join(lines) + "\n", encoding="utf-8")
     action = "Would submit" if dry_run else "Submitted"
     message = f"{action} {submitted_count} {stage} job(s)"
     if skipped_count:
@@ -279,6 +442,40 @@ def _run_submit_command(submit_command: str, script: Path) -> str:
 
 def _is_nohup_submit(submit_command: str) -> bool:
     return shlex.split(submit_command) == ["nohup"]
+
+
+def _is_foreground_bash_submit(submit_command: str) -> bool:
+    """Return whether submit scripts run synchronously through Bash."""
+    command = shlex.split(submit_command)
+    if not command:
+        return False
+    return Path(command[0]).name.lower() in {"bash", "bash.exe"}
+
+
+def _progress_line(
+    status: str,
+    job_number: int,
+    total_jobs: int,
+    workdir: Path,
+    *,
+    elapsed: float | None = None,
+) -> str:
+    """Format one timestamped live progress event."""
+    line = (
+        f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] "
+        f"{status:<9} {job_number}/{total_jobs}  {workdir}"
+    )
+    if elapsed is not None:
+        line += f"  elapsed={_format_elapsed(elapsed)}"
+    return line
+
+
+def _format_elapsed(elapsed: float) -> str:
+    """Format elapsed seconds as HH:MM:SS without wrapping after 24 hours."""
+    total_seconds = max(0, int(elapsed))
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
 
 def _stage_prepared_jobs(

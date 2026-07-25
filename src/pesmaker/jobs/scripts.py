@@ -19,6 +19,7 @@
 from __future__ import annotations
 
 import re
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -45,6 +46,17 @@ def _write_submit_script(
     resources: JobResources | None = None,
 ) -> Path:
     template_path = _job_template_path(config, stage)
+    if _copy_sub_file_enabled(config, stage):
+        if template_path is None:
+            raise ValueError(
+                "jobs.copy_sub_file requires an SCF submit template in "
+                "jobs.sub_file, jobs.sbatch_templates, or jobs.sbatch_template"
+            )
+        path = workdir / "submit.sh"
+        if template_path.resolve() != path.resolve():
+            shutil.copy2(template_path, path)
+        return path
+
     job_name = _submit_job_name(workdir)
     resources = resources or _job_resources(config)
     engine = _stage_engine(config, stage)
@@ -95,6 +107,14 @@ def _write_submit_script(
     if path != compatibility_path:
         compatibility_path.write_text(text, encoding="utf-8")
     return path
+
+
+def _copy_sub_file_enabled(config: PESMakerConfig, stage: str) -> bool:
+    """Return whether an SCF submit template should be copied verbatim."""
+    value = config.jobs.options.get("copy_sub_file", False)
+    if not isinstance(value, bool):
+        raise ValueError("jobs.copy_sub_file must be true or false")
+    return stage == "labeling" and value
 
 
 def _job_template_path(config: PESMakerConfig, stage: str) -> Path | None:

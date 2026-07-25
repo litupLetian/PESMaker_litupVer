@@ -18,6 +18,7 @@
 from __future__ import annotations
 
 import argparse
+import signal
 import shlex
 import sys
 from pathlib import Path
@@ -38,7 +39,11 @@ from pesmaker.generators.structures import (
     format_generate_summary,
     generate_structures,
 )
-from pesmaker.jobs.submit import submit_jobs
+from pesmaker.jobs.submit import (
+    SubmissionJobError,
+    start_background_submit,
+    submit_jobs,
+)
 from pesmaker.labelers.vasp import setup_labeling
 from pesmaker.plot import available_plot_commands, run_plot_command
 from pesmaker.results import StageResult
@@ -198,6 +203,14 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Write the submission commands without calling the scheduler.",
     )
+    submit_parser.add_argument(
+        "--background",
+        action="store_true",
+        help=(
+            "Run the whole submit operation in a detached process that "
+            "survives terminal or SSH disconnection."
+        ),
+    )
 
     init_parser = subparsers.add_parser(
         "init",
@@ -288,6 +301,19 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         if args.command == "submit":
+            if args.background:
+                if args.dry_run:
+                    raise ValueError("--background cannot be used with --dry-run")
+                process = start_background_submit(
+                    config,
+                    args.config,
+                    stage=args.stage,
+                )
+                print("Background submission started.")
+                print(f"Process ID       : {process.pid}")
+                print(f"Log              : {process.log_path}")
+                print()
+                return 0
             _print_submit_result(
                 submit_jobs(config, stage=args.stage, dry_run=args.dry_run),
                 config_path=args.config,
@@ -296,6 +322,9 @@ def main(argv: list[str] | None = None) -> int:
                 submit_command=str(config.jobs.options.get("submit_command", "sbatch")),
             )
             return 0
+    except SubmissionJobError as exc:
+        print(_format_submission_job_error(exc), file=sys.stderr)
+        return 2
     except (OSError, ValueError) as exc:
         print(
             _format_cli_error(args.command, args.config, config, exc), file=sys.stderr
@@ -344,6 +373,32 @@ def _format_cli_error(
             ]
         )
     return f"Error: {message}"
+
+
+def _format_submission_job_error(exc: SubmissionJobError) -> str:
+    """Format a failed submit script without exposing a Python traceback."""
+    mode = "serial submission" if exc.serial else "submission"
+    termination = _termination_name(exc.returncode)
+    lines = [
+        f"{exc.stage.upper()} {mode} stopped.",
+        f"Failed job       : {exc.workdir}",
+        f"Exit status      : {exc.returncode}",
+    ]
+    if termination is not None:
+        lines.append(f"Termination      : {termination}")
+    lines.append(f"Remaining jobs   : {exc.remaining_jobs} not started")
+    return "\n".join(lines)
+
+
+def _termination_name(returncode: int) -> str | None:
+    """Decode conventional shell signal exit statuses such as 143."""
+    signal_number = -returncode if returncode < 0 else returncode - 128
+    if signal_number <= 0:
+        return None
+    try:
+        return signal.Signals(signal_number).name
+    except ValueError:
+        return None
 
 
 def _write_starter_config(path: Path) -> int:

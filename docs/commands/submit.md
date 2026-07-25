@@ -58,6 +58,76 @@ incomplete VASP output, or an electronic SCF nonconvergence marker. If
 `Jobs to submit` is `0`, all discovered calculations are complete according to
 the configured checks.
 
+## Run the Whole Submission in the Background
+
+Use `--background` to detach the whole PESMaker submit operation from the
+current terminal or SSH session:
+
+```bash
+pesmaker submit run.yaml --background
+```
+
+PESMaker prints the detached process ID and a unique log path, then returns to
+the shell immediately:
+
+```text
+Background submission started.
+Process ID       : 18420
+Log              : /path/to/labeling/scf_submit_20260715-153000_18419.log
+```
+
+This option protects the outer PESMaker process. It is especially useful with
+`jobs.submit_command: bash`, because the detached worker keeps the complete
+serial sequence alive and starts the next calculation only after the current
+`submit.sh` exits. Closing the terminal does not stop that worker.
+
+For synchronous `bash` submissions, PESMaker reports every calculation as it
+starts and as soon as its `submit.sh` exits:
+
+```text
+[2026-07-15 18:20:03] STARTED   1/120  labeling/calc_000000
+[2026-07-15 18:52:41] COMPLETED 1/120  labeling/calc_000000  elapsed=00:32:38
+[2026-07-15 18:52:41] STARTED   2/120  labeling/calc_000001
+```
+
+A nonzero script exit is reported as `FAILED` before the serial sequence stops.
+Each event is flushed immediately to both the terminal and
+`labeling/scf_submitted_jobs.txt`. With `--background`, terminal output is
+redirected to the printed `scf_submit_*.log`, so both logs can be monitored
+while the calculations are running. `COMPLETED` means that `submit.sh` exited
+successfully; it does not by itself certify VASP electronic convergence.
+
+The CLI converts a failed script into a concise stop summary instead of a
+Python traceback. For example, shell status `143` conventionally means that the
+script received `SIGTERM`:
+
+```text
+SCF serial submission stopped.
+Failed job       : labeling/calc_000004
+Exit status      : 143
+Termination      : SIGTERM
+Remaining jobs   : 115 not started
+```
+
+The same summary is written to `scf_submit_*.log` during a background run. The
+failed event remains in `scf_submitted_jobs.txt`.
+
+Monitor it with the printed log path or the normal calculation output files:
+
+```bash
+tail -f labeling/scf_submit_20260715-153000_18419.log
+```
+
+The same option works for other stages:
+
+```bash
+pesmaker submit run.yaml --stage sampling --background
+pesmaker submit run.yaml --stage training --background
+```
+
+`--background` cannot be combined with `--dry-run`. Preview in the foreground
+first, then start the real background submission.
+
 ## Stage Names
 
 `submit` is one command with different stages:
@@ -112,6 +182,11 @@ present in the YAML. Completed folders are not modified. This refresh also
 happens during `--dry-run`, while the scheduler itself is not called. If no
 script-refresh setting is present, PESMaker submits the existing `submit.sh`
 without rewriting it.
+
+For SCF jobs, `jobs.copy_sub_file: true` changes that refresh into a direct,
+byte-for-byte copy of the configured template. No placeholders, Slurm job
+names, resource values, or commands are rewritten. The option requires a
+submit template and defaults to `false`.
 
 When `jobs.sub_file` is provided, PESMaker does not scan and rewrite literal
 resource directives such as `#SBATCH --ntasks` or literal VASP command lines.
