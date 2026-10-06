@@ -143,6 +143,37 @@ bash submit.sh --gpu 0
 mpirun -np 1 /path/to/vasp_std
 ```
 
+### oneAPI 与非交互式 Conda 环境
+
+工作池通过非交互式 `bash submit.sh` 启动单点任务。若 Python 控制器是在 Conda
+环境中启动的，子 Shell 会继承 `CONDA_PREFIX`、`CONDA_EXE` 等环境变量，但通常
+不会继承交互式 Shell 中的 `conda` 函数。某些 Intel oneAPI `setvars.sh` 会在
+初始化 `intelpython` 时调用 `conda deactivate`，此时可能出现：
+
+```text
+CondaError: Run 'conda init' before 'conda deactivate'
+```
+
+随工具提供的 `templates/submit.sh` 已在加载 VASP 环境之前处理这种情况：仅当
+存在 `CONDA_EXE` 且当前 Shell 没有 `conda` 函数时，自动从 Conda 安装根目录
+加载 `etc/profile.d/conda.sh`。没有使用 Conda 或已经完成 Shell 初始化的环境
+不会重复执行该操作，也不需要运行 `conda init bash`。
+
+更换服务器后，建议先在一个计算目录以前台模式验证环境：
+
+```bash
+bash submit.sh --gpu 0
+```
+
+若使用自行维护的旧模板，应把同样的 Conda 初始化保护放在：
+
+```bash
+source "$vasp_env_file"
+```
+
+之前。已经生成的单点目录包含模板的独立副本；只修改源模板不会自动更新这些
+已有副本。
+
 默认断点续跑规则：
 
 - OUTCAR 包含正常 VASP timing/accounting 结尾且没有电子不收敛标记：跳过；
@@ -184,7 +215,7 @@ VASP_AIMD/
 ## FPS 脚本用法
 
 ```bash
-python PESMaker_AIMD_Toolkit/aimd_fps_to_nep.py \
+python PESMaker_AIMD_and_SinglePoint_Toolkit/aimd_fps_to_nep.py \
   --aimd-dir /absolute/path/to/VASP_AIMD \
   --max-count 200 \
   --min-distance 0.0
@@ -225,7 +256,7 @@ PESMakerToolkit_AIMD_FPS_to_NEP/
 最简调用：
 
 ```bash
-python PESMaker_AIMD_Toolkit/aimd_interval_to_nep.py \
+python PESMaker_AIMD_and_SinglePoint_Toolkit/aimd_interval_to_nep.py \
   --aimd-dir /absolute/path/to/VASP_AIMD \
   --interval 100
 ```
@@ -233,7 +264,7 @@ python PESMaker_AIMD_Toolkit/aimd_interval_to_nep.py \
 指定起始帧和结束帧：
 
 ```bash
-python PESMaker_AIMD_Toolkit/aimd_interval_to_nep.py \
+python PESMaker_AIMD_and_SinglePoint_Toolkit/aimd_interval_to_nep.py \
   --aimd-dir /absolute/path/to/VASP_AIMD \
   --interval 100 \
   --start-frame 1000 \
@@ -323,7 +354,7 @@ PESMakerToolkit_AIMD_Interval_to_NEP/
 脚本不调用或修改 PESMaker 本体；XDATCAR 和 OUTCAR 均按流读取。每条轨迹被划分为等宽时间区间，每个区间选择一个未训练且与最近训练帧时间距离尽可能大的构型，从而兼顾时间覆盖和训练/测试帧分离。
 
 ```bash
-python PESMaker_AIMD_Toolkit/prepare_aimd_testset.py \
+python PESMaker_AIMD_and_SinglePoint_Toolkit/prepare_aimd_testset.py \
   --aimd-root /absolute/path/to/AIMD_ROOT \
   --training-source interval \
   --count-per-trajectory 20
@@ -342,7 +373,7 @@ python PESMaker_AIMD_Toolkit/prepare_aimd_testset.py \
 例如，准备一个尽可能完整的 Interval 外部帧测试集：
 
 ```bash
-python PESMaker_AIMD_Toolkit/prepare_aimd_testset.py \\
+python PESMaker_AIMD_and_SinglePoint_Toolkit/prepare_aimd_testset.py \\
   --aimd-root /absolute/path/to/AIMD_ROOT \\
   --training-source interval \\
   --all-unused \\
@@ -388,7 +419,7 @@ AIMD_ROOT/
 用户必须明确指定合并来源，不允许脚本自动猜测或混合 FPS 与 Interval：
 
 ```bash
-python PESMaker_AIMD_Toolkit/merge_aimd_train_xyz.py \
+python PESMaker_AIMD_and_SinglePoint_Toolkit/merge_aimd_train_xyz.py \
   --aimd-root /absolute/path/to/AIMD_ROOT \
   --source interval
 ```
@@ -396,7 +427,7 @@ python PESMaker_AIMD_Toolkit/merge_aimd_train_xyz.py \
 合并 FPS 来源：
 
 ```bash
-python PESMaker_AIMD_Toolkit/merge_aimd_train_xyz.py \
+python PESMaker_AIMD_and_SinglePoint_Toolkit/merge_aimd_train_xyz.py \
   --aimd-root /absolute/path/to/AIMD_ROOT \
   --source fps
 ```
@@ -524,7 +555,7 @@ Windows D 盘在 WSL 中通常映射到 `/mnt/d`。例如：
 
 ```bash
 conda run -n pesmaker python \
-  /mnt/d/ResearchData/PESMaker_litupVer/PESMaker_AIMD_Toolkit/aimd_interval_to_nep.py \
+  /mnt/d/ResearchData/PESMaker_litupVer/PESMaker_AIMD_and_SinglePoint_Toolkit/aimd_interval_to_nep.py \
   --aimd-dir /mnt/d/ResearchData/example_AIMD \
   --interval 100 \
   --start-frame 0

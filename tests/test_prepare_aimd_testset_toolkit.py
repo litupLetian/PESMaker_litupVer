@@ -7,7 +7,10 @@ import sys
 import pytest
 
 
-TOOLKIT_DIR = Path(__file__).resolve().parents[1] / "PESMaker_AIMD_Toolkit"
+TOOLKIT_DIR = (
+    Path(__file__).resolve().parents[1]
+    / "PESMaker_AIMD_and_SinglePoint_Toolkit"
+)
 if str(TOOLKIT_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLKIT_DIR))
 
@@ -59,8 +62,8 @@ def test_balanced_selection_is_disjoint_and_spans_time_bins():
 def test_balanced_selection_rejects_bin_without_unused_frame():
     with pytest.raises(tool.ToolkitError, match="contains no unused frame"):
         tool.select_balanced_unused_frames(
-            frame_count=2,
-            excluded_frames={0},
+            frame_count=4,
+            excluded_frames={0, 1},
             count=2,
         )
 

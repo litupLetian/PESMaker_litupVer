@@ -19,7 +19,10 @@ import sys
 import pytest
 
 
-TOOLKIT_DIR = Path(__file__).resolve().parents[1] / "PESMaker_AIMD_Toolkit"
+TOOLKIT_DIR = (
+    Path(__file__).resolve().parents[1]
+    / "PESMaker_AIMD_and_SinglePoint_Toolkit"
+)
 SCRIPT_PATH = TOOLKIT_DIR / "run_vasp_gpu_pool.py"
 SUBMIT_TEMPLATE_PATH = TOOLKIT_DIR / "templates" / "submit.sh"
 SPEC = importlib.util.spec_from_file_location("run_vasp_gpu_pool", SCRIPT_PATH)
@@ -230,3 +233,14 @@ def test_submit_template_has_separate_pool_and_manual_modes():
     assert '"${PESMAKER_GPU_POOL:-0}" == "1"' in text
     assert 'run_mode="foreground"' in text
     assert 'nohup "${child_command[@]}"' in text
+
+
+def test_submit_template_initializes_conda_before_oneapi_environment():
+    text = SUBMIT_TEMPLATE_PATH.read_text(encoding="utf-8")
+
+    conda_guard = '[[ -n "${CONDA_EXE:-}" ]] && ! declare -F conda'
+    conda_source = 'source "$conda_sh"'
+    vasp_source = 'source "$vasp_env_file"'
+    assert conda_guard in text
+    assert conda_source in text
+    assert text.index(conda_source) < text.index(vasp_source)

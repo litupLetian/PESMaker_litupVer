@@ -133,7 +133,21 @@ export CUDA_VISIBLE_DEVICES="$assigned_gpu"
 
 # The vendor environment may not be compatible with nounset, so this script
 # intentionally uses set -eo pipefail rather than set -euo pipefail.
+# Make `conda deactivate` available to non-interactive Bash.
+if [[ -n "${CONDA_EXE:-}" ]] && ! declare -F conda >/dev/null 2>&1; then
+    conda_base="$(dirname "$(dirname "$CONDA_EXE")")"
+    conda_sh="$conda_base/etc/profile.d/conda.sh"
+
+    if [[ ! -r "$conda_sh" ]]; then
+        echo "Error: Conda initialization script is not readable: $conda_sh" >&2
+        exit 2
+    fi
+
+    source "$conda_sh"
+fi
+
 source "$vasp_env_file"
+
 # Preserve the assignment made by the pool or --gpu even if ENV changes it.
 export CUDA_VISIBLE_DEVICES="$assigned_gpu"
 
