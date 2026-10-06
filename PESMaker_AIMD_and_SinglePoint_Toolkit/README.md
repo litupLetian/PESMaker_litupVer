@@ -1,14 +1,16 @@
 # PESMaker VASP AIMD → NEP Toolkit
 
-本目录提供两个独立于 PESMaker 工作流的辅助脚本，用于从单个 VASP AIMD 目录生成 GPUMD/NEP 可用的 `train.xyz`。
+本目录提供独立于 PESMaker 工作流的辅助脚本，用于从 VASP AIMD 生成、合并 GPUMD/NEP 数据集，并准备不与已有训练帧重叠的测试集。
 
 | 脚本 | 选择方式 | 适合用途 |
 | --- | --- | --- |
 | `aimd_fps_to_nep.py` | PESMaker 最远点采样（FPS） | 根据构型差异选择代表性结构 |
 | `aimd_interval_to_nep.py` | 等间距采样 | 按固定轨迹帧间隔抽稀 AIMD 时间序列 |
 | `merge_aimd_train_xyz.py` | 指定来源合并 | 将多个正式 FPS 或 Interval `train.xyz` 合并并记录来源范围 |
+| `prepare_aimd_testset.py` | 排除训练帧后均衡采样 | 从多个 AIMD 轨迹生成带标签的 NEP `test.xyz` |
+| `run_vasp_gpu_pool.py` | 本地 GPU 工作池 | 在无 Slurm 服务器上将已准备的 VASP 单点目录按空闲 GPU 排队运行 |
 
-两个脚本都不会修改或导入 PESMaker 私有源码，而是调用正式命令：
+FPS 和等间距脚本不会修改或导入 PESMaker 私有源码，而是调用正式命令：
 
 ```text
 python -m pesmaker select <自动生成的 YAML>
@@ -43,7 +45,7 @@ OUTCAR 一次只解析一个离子步，不会一次性把全部帧读入内存�
 - 变胞 AIMD。
 - 多个 AIMD 目录合并。
 - 拼接或混用的续算轨迹。
-- train/test 划分。
+- 任意比例的随机 train/test 划分；测试集脚本只按已有帧映射排除训练帧并均衡选帧。
 - 电子步收敛质量过滤。
 - 已有输出目录覆盖或续跑。
 
@@ -66,6 +68,105 @@ python -c "import ase, numpy, yaml; print(ase.__version__)"
 ```
 
 脚本通过 `sys.executable -m pesmaker select` 启动 PESMaker。因此，运行脚本的 Python 环境必须就是安装 PESMaker 的环境。
+
+## 无 Slurm 服务器上的 VASP GPU 工作池
+
+`run_vasp_gpu_pool.py` 独立于 PESMaker 源码。它递归发现同时包含
+`POSCAR` 和 `submit.sh` 的计算目录，每张候选 GPU 同时直接运行一个
+`bash submit.sh`。某张 GPU 上的进程退出后，该 GPU 立即领取队列中的下一个
+目录；不同 GPU 之间并行。
+
+先预览任务和当前 GPU 状态：
+
+```bash
+python run_vasp_gpu_pool.py /path/to/labeling \
+  --gpus auto \
+  --dry-run
+```
+
+让 Python 控制器自身脱离终端，并使用所有自动识别为空闲的 GPU 运行：
+
+```bash
+python run_vasp_gpu_pool.py /path/to/labeling \
+  --gpus auto \
+  --background
+```
+
+命令返回后，控制器 PID 位于 `labeling/gpu_pool.pid`，控制器输出追加到
+`labeling/gpu_pool_driver.log`。可以关闭 SSH 或终端窗口；查看控制器输出使用：
+
+```bash
+tail -f /path/to/labeling/gpu_pool_driver.log
+```
+
+只允许物理 GPU 0、2 和 3：
+
+```bash
+python run_vasp_gpu_pool.py /path/to/labeling --gpus 0,2,3
+```
+
+默认只有在 GPU 已用显存不超过 1024 MB 且利用率不超过 10% 时才启动任务。
+阈值可以按服务器的显示服务、ECC 和驱动常驻显存调整：
+
+```bash
+python run_vasp_gpu_pool.py /path/to/labeling \
+  --gpus 0,1,2,3 \
+  --max-memory-used-mb 1500 \
+  --max-utilization 10 \
+  --poll-seconds 10
+```
+
+脚本将物理 GPU 编号写入每个子进程的 `CUDA_VISIBLE_DEVICES`，并设置
+`PESMAKER_GPU_POOL=1`。因此 `submit.sh` 不得在工作池模式下再次硬编码或覆盖
+GPU，也不能在该模式下把 VASP 放到后台，否则调度器会过早释放这张 GPU。
+
+`templates/submit.sh` 已经兼容两种调用方式。手工测试一个目录并将其独立提交
+到后台时使用：
+
+```bash
+bash submit.sh --background --gpu 0
+```
+
+这会生成 `vasp.log` 和运行期间的 `vasp.pid`，并且不受 Python 工作池控制。
+工作池执行同一个文件时会自动设置 `PESMAKER_GPU_POOL=1` 并在前台等待真实
+VASP 进程结束，不需要改变任务脚本。也可以手工以前台模式调试：
+
+```bash
+bash submit.sh --gpu 0
+```
+
+模板默认采用参考脚本中的 VASP 6.5.1 路径；如服务器路径不同，可以修改模板
+顶部默认值，或者在调用前设置 `VASP_ENV_FILE` 和 `VASP_BINARY`。一张 GPU 对应
+一个任务时，模板最终运行的核心命令为：
+
+```bash
+mpirun -np 1 /path/to/vasp_std
+```
+
+默认断点续跑规则：
+
+- OUTCAR 包含正常 VASP timing/accounting 结尾且没有电子不收敛标记：跳过；
+- 没有 OUTCAR、OUTCAR 不完整或有电子不收敛标记：进入待运行队列；
+- shell 返回 0 但 OUTCAR 没有正常结尾：仍报告失败；
+- `--failure-policy continue`：单个失败后继续其他任务；
+- `--failure-policy stop`：停止启动新任务，但不杀死已经运行的任务。
+
+主要输出为：
+
+```text
+labeling/gpu_pool_events.jsonl       # 全局启动、完成和失败事件
+labeling/gpu_pool_driver.log         # 后台 Python 控制器输出
+labeling/gpu_pool.pid                # 后台 Python 控制器运行期间的 PID
+labeling/**/gpu_pool.log             # 每个 submit.sh 的 stdout/stderr
+labeling/**/OUTCAR                   # VASP 自身输出
+labeling/**/vasp.exitcode             # 模板判定的最终退出码
+labeling/**/vasp.done|vasp.failed     # 单点成功或失败摘要
+```
+
+脚本用 `/tmp/pesmaker_gpu_pool_locks/` 中的 Linux 文件锁协调多个该脚本实例，
+但无法阻止其他不使用该锁的软件在状态检查后抢占 GPU。因此共享服务器上仍建议
+明确指定 `--gpus`，并与其他用户约定 GPU 所有权；正式多用户资源管理仍应使用
+Slurm 等调度器。
 
 ## 预期输入
 
@@ -214,6 +315,71 @@ PESMakerToolkit_AIMD_Interval_to_NEP/
 ```
 
 等间距采样不计算 FPS 描述符，因此不会生成 `selection_features.npy` 或 `fps_selection.png`。
+
+## 未训练 AIMD 帧测试集
+
+`prepare_aimd_testset.py` 用于从多个 AIMD 项目中准备一个带标签的 `test.xyz`。脚本读取已有 Toolkit 训练输出中的 `frame_mapping.jsonl`，将其中的 `source_frame` 作为排除清单，因此不会把已经参与训练的帧再次放入测试集。
+
+脚本不调用或修改 PESMaker 本体；XDATCAR 和 OUTCAR 均按流读取。每条轨迹被划分为等宽时间区间，每个区间选择一个未训练且与最近训练帧时间距离尽可能大的构型，从而兼顾时间覆盖和训练/测试帧分离。
+
+```bash
+python PESMaker_AIMD_Toolkit/prepare_aimd_testset.py \
+  --aimd-root /absolute/path/to/AIMD_ROOT \
+  --training-source interval \
+  --count-per-trajectory 20
+```
+
+参数：
+
+| 参数 | 是否必填 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--aimd-root` | 是 | 无 | 多个真实 AIMD 项目的直接上级目录 |
+| `--training-source` | 是 | 无 | 要排除的训练来源：`interval` 或 `fps` |
+| `--count-per-trajectory` | 否 | `20` | 每条轨迹选择的测试帧数 |
+| `--all-unused` | 否 | 关闭 | 使用所有未进入指定训练集、且可从 OUTCAR 获得完整标签的帧；不能与 `--count-per-trajectory` 同时指定 |
+| `--output-dir-name` | 否 | `test_verification_testset` | 在 AIMD 根目录下创建的输出目录名称 |
+
+例如，准备一个尽可能完整的 Interval 外部帧测试集：
+
+```bash
+python PESMaker_AIMD_Toolkit/prepare_aimd_testset.py \\
+  --aimd-root /absolute/path/to/AIMD_ROOT \\
+  --training-source interval \\
+  --all-unused \\
+  --output-dir-name test_veirfication_testset99pct
+```
+
+`--all-unused` 不会将所有构型读入内存；脚本按 XDATCAR 与 OUTCAR 流式同步处理。若 XDATCAR 尾帧没有相应 OUTCAR 标签（例如计算未完整写出末步），该帧不能成为监督测试样本，会记录在 `skipped_unlabeled_frames.tsv`。
+
+以 `--training-source interval` 为例，脚本只识别以下结构：
+
+```text
+AIMD_ROOT/
+├── AIMD_project_1/
+│   ├── INCAR
+│   ├── XDATCAR
+│   ├── OUTCAR
+│   └── PESMakerToolkit_AIMD_Interval_to_NEP/
+│       └── frame_mapping.jsonl
+└── AIMD_project_2/
+    └── ...
+```
+
+输出目录固定为：
+
+```text
+<aimd-root>/test_verification_testset/
+├── test.xyz
+├── frame_mapping.jsonl
+├── source_ranges.tsv
+├── skipped_unlabeled_frames.tsv
+├── README.md
+└── toolkit.log
+```
+
+如果目标目录已经存在但为空，脚本可以使用它；如果目录中已有任何文件，则拒绝覆盖。`test.xyz` 先写为 `.partial`，所有项目均完成构型和标签验证后才成为正式文件。
+
+需要注意：未参与训练并不等于严格独立。这里的测试帧仍来自与训练集相同的 AIMD 轨迹，主要用于评估同分布插值误差；对新温度、新成分、新结构类型或新演化路径的泛化能力还需要另建外部验证集。
 
 ## 合并脚本用途与语法
 
